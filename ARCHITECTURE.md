@@ -1,0 +1,305 @@
+# Current Architecture
+
+Core flow:
+
+SourceRegistry
+defines sources.
+It also defines per-source politeness policy such as refresh cadence and failure backoff defaults.
+It is now evolving toward modular source packs so Malcome can group, enable, disable, and later swap source bundles without rewriting the engine.
+The registry is now composed from pack modules such as LA Music Core, LA Art Core, Cross-City Editorial, Creator Platforms, and Support Signals.
+The Cross-City Editorial pack now spans more than one city-domain lane at once, including film, art, tastemaker music, fashion/culture editorial, and design editorial outside Los Angeles.
+It now mixes WordPress-backed and RSS-backed tastemaker sources so controlled expansion can widen geography and domains without inventing a new parser family every time.
+Each source carries pack metadata so the UI can expose both per-source and per-pack controls.
+Each source also carries source-family metadata, which is distinct from pack metadata: packs are for user/discovery control, while source families are for corroboration and independence scoring.
+Creator-platform sources can now live in their own pack instead of being forced into editorial-only groupings, which keeps future marketplaces, tools, and platform-based signal lanes modular.
+The Creator Platforms pack now includes more than one curated film/video tastemaker lane, which makes platform expansion feel like a real ecosystem instead of a one-off experiment.
+Each source now also exposes a structured doctrine profile in the product and harness, so Malcome can explain why the source is early, why it is selective, and how it is meant to help corroboration.
+
+SourcePipeline
+fetches and parses.
+For selected archive-friendly sources, it can also backfill historical pages through the same production parser path.
+When a source exposes a cleaner archive endpoint than its public pagination, the backfill path may use that archive endpoint while still running through the same parser abstraction and repository path.
+Backfill strategies may be source-specific, including paginated editorial archives and cursor-based discovery APIs, as long as they enter through the same production fetch, parse, persist, and score flow.
+For Ghost-backed editorial sources such as Hyperallergic, Malcome now prefers the source's public content API for current fetches and archive backfill rather than fragile homepage card scraping.
+For WordPress-backed editorial and community sources, Malcome now uses a shared `wp-json/wp/v2/posts` adapter for current fetches and archive backfill instead of source-specific homepage scraping.
+For tastemaker and magazine feeds that expose stable RSS, Malcome now uses a shared RSS adapter rather than one-off feed scrapers.
+Editorial and community parsers can now tag recurring series, roundups, and self-branded program formats at parse time so the scoring layer can treat “The Film Comment Podcast” or “KXLU's New Adds” differently from reusable cultural entities.
+
+AppRepository
+persists snapshots and observations.
+It deduplicates observations at insert time so live refreshes and historical backfills do not create duplicate evidence.
+It also persists per-source fetch policy state such as last attempt time, backoff windows, and consecutive failure counts.
+
+SignalEngine
+builds signals from history.
+
+BriefComposer
+creates summaries.
+
+Validation flow:
+
+PipelineHarness
+runs the production fetch, parse, persist, score, and brief path without the UI.
+It lives at `Scripts/run-pipeline-check.sh` and compiles the production Swift files directly from the repo.
+
+DeviceSmokeHarness
+builds, installs, launches, and performs lightweight runtime verification on the real app on a connected iPhone so hardware QA can be repeated intentionally instead of by ad hoc manual steps.
+It lives at `Scripts/run-device-smoke.sh` and is intended to stay in-repo so the hardware workflow remains portable.
+
+Historical signal flow:
+
+CanonicalEntity
+resolves observations toward a stable identity with aliases and source-role attribution.
+Each canonical entity also carries merge-confidence metadata describing how trustworthy the identity cluster is.
+Canonical identity now stores the weakest accepted merge confidence and an explainable merge summary so risky historical attachments can be audited later.
+
+SequenceIntelligence
+derives ordered source-role progression and time gaps from entity source-role history.
+
+EntityHistory
+tracks per-entity first seen, last seen, appearance count, source diversity, domain, and entity type.
+
+EntityStageSnapshot
+persists a daily per-entity stage snapshot so Malcome can reason across 7 day, 30 day, and 90 day horizons.
+
+SignalRun
+persists every scoring run with dated rank, score, supporting sources, and observation count.
+
+SignalMovement
+classifies signals as new, rising, stable, or declining by comparing the current run against prior persisted runs.
+
+SignalMaturity
+classifies entities as early emergence, advancing, peaking, cooling, or stalled from longer-horizon stage history.
+
+SignalLifecycle
+classifies the broader state of an entity as emerging, advancing, peaked, cooling, failed, or disappeared.
+
+PathwayHistory
+stores per-entity progression pathways and their observed outcomes across scoring runs.
+
+PathwayStat
+aggregates pathway histories so Malcome can learn which routes tend to advance, peak, fail, or disappear.
+
+OutcomeConfirmation
+stores when an entity later reaches stronger downstream relevance tiers than its early-stage appearance.
+
+SourceInfluenceStat
+aggregates historical source and source-family outcomes so Malcome can learn which inputs tend to convert into stronger signals and which ones mostly produce noise or stalled movement.
+These stats are available to both the harness and the in-app review surfaces so the learning layer stays inspectable.
+
+IdentityReview
+surfaces ambiguous canonical entities, merge confidence, risky aliases, and source-role evidence so identity quality can be audited directly.
+It is available both as an app review surface and as a harness output section so identity trust can be checked without guessing.
+
+ConversionState
+classifies whether an entity converted, stalled before conversion, never converted, or is still too early to call.
+
+SignalExplanation
+describes why a signal moved, what changed, and which sources contributed.
+It now also distinguishes between independent corroboration and support that comes from the same source family, so repeated evidence from closely related inputs does not masquerade as broad cultural agreement.
+Self-branded editorial or program formats are also downgraded unless they escape a single source family or evolve into stronger corroborated evidence.
+
+ProgressionExplanation
+describes where an entity started, where it appeared next, and which cultural pathway it matches.
+
+MaturityExplanation
+describes the 7 day, 30 day, and 90 day context behind sustained emergence or decline.
+
+LifecycleExplanation
+describes whether an entity is still building, fading, failing to progress, or disappearing from the observed system.
+
+PathwayExplanation
+describes whether a progression route has historically been predictive or failure-prone.
+
+ConversionExplanation
+describes whether an entity has achieved downstream validation and which stronger tiers confirmed it.
+
+SourceInfluenceExplanation
+describes why a source or source family is being trusted more or less, using stored historical outcomes rather than opaque weights.
+That explanation now flows into both audit surfaces and the brief layer so the product can explain learned trust without forcing the user into a diagnostics screen.
+
+Reading surfaces:
+
+NarrativeRead
+is the fast human-reading layer.
+It should answer what matters now in calm, legible language.
+It can also carry restrained source-learning context when Malcome has enough historical evidence to say that a lane has earned more trust.
+
+InvestigationRead
+is the deeper human-review layer.
+It should preserve score logic, evidence, identity confidence, and source contribution details without overwhelming the default reading path.
+
+WatchlistCandidate
+is a curated pre-signal layer built from stored observations when corroboration is still thin.
+It should surface the strongest current candidates without pretending they have already graduated into full signals.
+It now prefers canonical entity labels and stored entity history over raw observation titles whenever the underlying identity is trustworthy enough to support a reusable cultural subject.
+It also carries explicit fast-reading explanation fields so the app can say why something is on the watchlist and what would upgrade it into a real signal without forcing the view layer to reconstruct that logic ad hoc.
+Each candidate also carries a watchlist stage such as early, forming, or corroborating so the user can feel the difference between a first hint and a stronger pre-signal pattern.
+Each candidate now also carries explicit current-read counts and stored-history counts so the product can say whether a pattern is live right now, historical, or both.
+
+Runtime behavior:
+
+Each refresh now does more than fetch data.
+It refreshes sources, optionally backfills approved archive pages for selected sources across more than one domain, persists observations with duplicate protection and historical tagging, resolves aliases into canonical entities with conservative merge scoring and explainable merge confidence, rejects weak merges across short names, common names, title-like aliases, cross-domain reuse, and unsupported long-gap historical jumps, writes canonical identity links back onto observations, rebuilds entity history from stored observations, rebuilds daily entity stage snapshots, derives ordered source-role progression from canonical source-role history, evaluates longer-horizon 7/30/90 day emergence context, synthesizes decay and disappearance outcomes from prior signal-run history, computes downstream outcome confirmations and conversion state, applies pathway weighting from historical pathway and conversion outcomes, stores current signal candidates, appends signal-run history, appends pathway history, rebuilds pathway statistics, stores outcome confirmations, and then generates a brief from persisted signal state.
+The product can also query canonical identity records, aliases, and source-role evidence to show why a merge was accepted and where identity ambiguity remains.
+Signal scoring now also reasons about source-family independence so closely related source variants contribute less corroboration than truly distinct cultural vantage points.
+Signals backed only by one source family now remain watchlist material unless they show evidence of progression into another source-role layer.
+Source-specific editorial parsers may now extract a leading subject entity when the title pattern is strong enough, so the watchlist can follow a reusable creator or institution instead of only replaying article headlines.
+Signal scoring is now evolving toward inspectable predictive weighting, where source and source-family reliability are learned from stored historical outcomes and then fed back into current ranking with plain-language summaries.
+Signal records now distinguish current support from stored history, so the UI can show live mentions and live source-family support separately from all-time mentions and source diversity.
+Runtime validation now has two sibling paths: a production data-engine harness and a real-device smoke harness.
+Refresh eligibility is now source-aware: a source may be attempted, skipped for cadence, or skipped for a live backoff window depending on its fetch policy state.
+
+Data model:
+
+Source
+Snapshot
+Observation
+Signal
+CanonicalEntity
+EntityAlias
+EntitySourceRole
+EntityHistory
+EntityStageSnapshot
+SignalRun
+PathwayHistory
+PathwayStat
+OutcomeConfirmation
+SourceInfluenceStat
+
+Source modularity fields:
+
+module id
+module name
+source family id
+source family name
+
+These let Malcome group sources into plugin-like packs such as local art editorial, community radio, or cross-city film editorial.
+The same fields can later support source-discovery promotion, pack-level enable/disable controls, and swapping in better sources without changing the scoring architecture.
+Pack-level controls are now live in the Sources screen, while individual source toggles remain available underneath each pack.
+Source-family metadata is used separately by scoring so Malcome can tell the difference between a user-visible pack and an actually independent corroboration lane.
+
+Observation metadata fields:
+
+external id or hash
+scraped at
+published at when available
+historical tags when the observation entered via archive backfill
+
+Observation identity rule:
+
+Observation IDs must be stable across app launches and refreshes.
+Malcome now uses deterministic observation keys rather than process-local hash values so the same event page, article, or release does not silently become a new observation on the next run.
+Event-like observations also expose a derived event-instance identity from normalized entity name, day, location, and normalized URL so storage checks and historical reasoning can share one event concept even before a dedicated event table exists.
+
+Timeline rule:
+
+Historical reasoning prefers published time when available.
+This prevents archive backfills from being mistaken for fresh emergence on the day they are imported.
+This includes full timestamps and date-only editorial archive dates.
+For event-like observations, historical counting now deduplicates toward unique event-instance keys rather than raw scrape sightings, so repeated pulls of the same calendar item do not masquerade as new evidence.
+
+CanonicalEntity fields:
+
+canonical id
+display name
+domain
+entity type
+alias set
+merge confidence
+merge evidence summary
+observation links
+
+Identity safeguards:
+
+short names
+common names
+title collisions
+cross-domain reuse
+large historical time gaps
+
+all raise the merge threshold.
+The system prefers false splits over false merges.
+Very long cross-source historical gaps now require stronger corroboration than a bare exact-name match, especially when a new source role would otherwise rewrite an entity timeline.
+
+EntitySourceRole fields:
+
+canonical id
+source id
+source classification
+first seen in source
+last seen in source
+appearance count in source
+
+SequenceIntelligence fields:
+
+ordered source classifications
+matched progression pattern
+time gaps between stages
+progression summary
+
+EntityStageSnapshot fields:
+
+canonical entity id
+date
+highest stage reached that day
+source count that day
+daily signal score
+
+EntityHistory fields:
+
+canonical name
+domain
+entity type
+first seen
+last seen
+appearance count
+source diversity
+
+SignalRun fields:
+
+run date
+rank
+score
+supporting sources
+observation count
+movement classification
+maturity classification
+lifecycle state
+explanation
+progression pattern
+
+PathwayHistory fields:
+
+run date
+canonical entity id
+pathway pattern
+domain
+lifecycle outcome
+signal score
+
+PathwayStat fields:
+
+pathway pattern
+domain
+sample count
+advancing count
+peaked count
+failed count
+disappeared count
+success weight
+failure weight
+predictive score
+summary
+
+OutcomeConfirmation fields:
+
+canonical entity id
+outcome tier
+confirmed at
+supporting source ids
+summary
+
+Key principle:
+
+Signals must derive from stored historical observations, not transient fetches.

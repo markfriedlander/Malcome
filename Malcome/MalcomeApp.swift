@@ -9,9 +9,12 @@ import SwiftUI
 
 @main
 struct MalcomeApp: App {
+    @StateObject private var appModel = AppViewModel(container: AppContainer.live())
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
+                .environmentObject(appModel)
         }
     }
 }
