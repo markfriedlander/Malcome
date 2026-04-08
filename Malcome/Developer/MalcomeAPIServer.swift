@@ -246,6 +246,7 @@ class MalcomeAPIServer {
     private func route(_ req: ParsedRequest) async -> (Int, String) {
         switch (req.method, req.path) {
         case ("POST", "/brief"):   return await handleBrief(body: req.body)
+        case ("GET", "/brief"):    return await handleGetBrief()
         case ("POST", "/chat"):    return await handleChat(body: req.body)
         case ("POST", "/command"): return await handleCommand(body: req.body)
         case ("GET", "/state"):    return await handleState()
@@ -319,6 +320,32 @@ class MalcomeAPIServer {
         } catch {
             return (500, "{\"error\": \(jsonEscape(error.localizedDescription))}")
         }
+    }
+
+    // MARK: - GET /brief (current pipeline brief)
+
+    private func handleGetBrief() async -> (Int, String) {
+        guard let model = appModel else {
+            return (503, #"{"error":"AppViewModel unavailable"}"#)
+        }
+
+        let briefData = await MainActor.run {
+            model.brief
+        }
+
+        guard let brief = briefData else {
+            return (404, #"{"error":"No brief generated yet. Use POST /command with NEW_BRIEF_CYCLE first."}"#)
+        }
+
+        let output = """
+        {
+          "title": \(jsonEscape(brief.title)),
+          "body": \(jsonEscape(brief.body)),
+          "generatedAt": \(jsonEscape(brief.generatedAt.ISO8601Format())),
+          "citationCount": \(brief.citationsPayload.count)
+        }
+        """
+        return (200, output)
     }
 
     // MARK: - POST /chat

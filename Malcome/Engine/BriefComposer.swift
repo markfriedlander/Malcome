@@ -11,6 +11,9 @@ struct BriefingInput: Sendable {
 
     let generatedAt: Date
     let signals: [SignalPacket]
+    let watchlistCandidates: [WatchlistCandidate]
+    let domainMix: [String]
+    let sourceInfluenceHighlights: [String]
 }
 
 protocol BriefGenerating: Sendable {
@@ -55,108 +58,73 @@ struct BriefComposer: Sendable {
                 entityHistoriesByID: entityHistoriesByID,
                 limit: 6
             )
-            let watchlistCitations = watchlistCandidates.enumerated().compactMap { pair -> BriefCitation? in
-                let (index, candidate) = pair
-                guard let observation = latestObservations.first(where: {
-                    ($0.canonicalEntityID.isEmpty ? $0.normalizedEntityName : $0.canonicalEntityID) == candidate.canonicalEntityID
-                        || $0.title == candidate.title
-                }) else {
-                    return nil
-                }
-
-                return BriefCitation(
-                    id: "watch-\(index)",
-                    signalName: "watchlist",
-                    sourceName: sourceNamesByID[observation.sourceID] ?? "Unknown Source",
-                    observationTitle: observation.title,
-                    url: observation.url,
-                    note: observation.excerpt ?? "Observed during the latest refresh."
-                )
-            }
-
-            let body: String
-            if latestObservations.isEmpty {
-                body = """
-                Malcome has not landed enough source data yet to write a useful brief.
-
-                What’s bubbling
-                • No observations have been stored yet.
-
-                Why it matters
-                • The source network needs at least one successful refresh before any evidence-based read is possible.
-
-                What may already be overcooked
-                • Nothing to call yet.
-                """
-            } else if watchlistCandidates.isEmpty {
-                body = """
-                Malcome has fresh observations, but nothing has cleared the corroboration bar yet.
-
-                What’s bubbling
-                • Single-lane detections are being stored and learned from, but Malcome is holding them out of the user-facing radar until another independent source family confirms them.
-
-                Why it matters
-                • One source can be a curiosity. Malcome only treats something as real radar material once it appears in more than one independent lane.
-                • This keeps the product closer to cultural detection and farther away from feed-reading.
-
-                What would upgrade this into a real signal
-                • A second independent source family, or another clearly separate cultural lane, would bring a candidate onto the radar.
-
-                What may already be overcooked
-                • Nothing to call yet. The point right now is waiting for confirmation, not forcing a story from thin evidence.
-                """
-            } else {
-                let leadNames = watchlistCandidates.prefix(3).map(\.title)
-                let watchlist = watchlistCandidates.prefix(5).map { candidate in
-                    "• \(candidate.title): \(watchlistBriefLine(for: candidate))"
-                }.joined(separator: "\n")
-                let domains = Array(Set(watchlistCandidates.prefix(5).map(\.domain.label))).sorted()
-                let domainPhrase = domainPhrase(for: domains)
-                let leadPhrase = naturalLanguageList(leadNames)
-                let learningBullets = watchlistLearningBullets(
-                    for: Array(watchlistCandidates.prefix(3)),
-                    sourcesByID: sourcesByID,
-                    sourceInfluenceByID: sourceInfluenceByID
-                )
-                let learningSection = learningBullets.isEmpty
-                    ? "• Malcome is still learning which lanes inside \(domainPhrase) convert into stronger cultural movement."
-                    : learningBullets.map { "• \($0)" }.joined(separator: "\n")
-
-                body = """
-                \(watchlistNarrativeIntro(leads: leadPhrase, domains: domainPhrase))
-
-                What’s bubbling
-                \(watchlist)
-
-                Why it matters
-                • These names are already surfacing in live source material, but they still need stronger corroboration before Malcome treats them as a real emergent cluster.
-                • The current watchlist leans on \(domainPhrase), which is useful for taste but still needs a second source family or repeat appearance to become conviction.
-                \(learningSection)
-
-                What would upgrade this into a real signal
-                • A second source family, a repeat appearance on the next pass, or movement into a new source role would promote one of these from “watch” to “signal.”
-
-                What may already be overcooked
-                • Still too early to call. The point right now is directional curiosity, not certainty.
-                """
-            }
-
-            let brief = BriefRecord(
-                id: UUID().uuidString,
-                generatedAt: .now,
-                title: latestObservations.isEmpty ? "Malcome Brief Pending" : (watchlistCandidates.isEmpty ? "Malcome Radar Pending" : "Malcome Watchlist"),
-                body: body,
-                citationsPayload: watchlistCitations,
-                periodType: .daily
+            let domainMix = Array(Set(watchlistCandidates.map(\.domain.label))).sorted()
+            let influenceHighlights = buildInfluenceHighlights(
+                signals: [],
+                watchlist: watchlistCandidates,
+                sourcesByID: sourcesByID,
+                sourceInfluenceByID: sourceInfluenceByID
             )
+            let input = BriefingInput(
+                generatedAt: .now,
+                signals: [],
+                watchlistCandidates: watchlistCandidates,
+                domainMix: domainMix,
+                sourceInfluenceHighlights: influenceHighlights
+            )
+            let brief = try await generator.generateBrief(from: input)
             try await repository.storeBrief(brief)
             return brief
         }
 
-        let input = BriefingInput(generatedAt: .now, signals: packets)
+        let watchlistForInput = buildWatchlistCandidates(
+            from: latestObservations,
+            sourcesByID: sourcesByID,
+            entityHistoriesByID: entityHistoriesByID,
+            limit: 4
+        )
+        let domainMix = Array(Set(
+            packets.map(\.signal.domain.label) + watchlistForInput.map(\.domain.label)
+        )).sorted()
+        let influenceHighlights = buildInfluenceHighlights(
+            signals: packets,
+            watchlist: watchlistForInput,
+            sourcesByID: sourcesByID,
+            sourceInfluenceByID: sourceInfluenceByID
+        )
+
+        let input = BriefingInput(
+            generatedAt: .now,
+            signals: packets,
+            watchlistCandidates: watchlistForInput,
+            domainMix: domainMix,
+            sourceInfluenceHighlights: influenceHighlights
+        )
         let brief = try await generator.generateBrief(from: input)
         try await repository.storeBrief(brief)
         return brief
+    }
+
+    private func buildInfluenceHighlights(
+        signals: [BriefingInput.SignalPacket],
+        watchlist: [WatchlistCandidate],
+        sourcesByID: [String: SourceRecord],
+        sourceInfluenceByID: [String: SourceInfluenceStatRecord]
+    ) -> [String] {
+        var highlights: [String] = []
+        let allCandidates = watchlist.prefix(3)
+        for candidate in allCandidates {
+            guard let stat = strongestInfluenceStat(
+                for: candidate,
+                sourcesByID: sourcesByID,
+                sourceInfluenceByID: sourceInfluenceByID
+            ) else { continue }
+            if let summary = watchlistLearningSummary(for: stat, domain: candidate.domain) {
+                highlights.append(summary)
+                if highlights.count >= 2 { break }
+            }
+        }
+        return highlights
     }
 
     func watchlistCandidates(limit: Int = 8) async throws -> [WatchlistCandidate] {

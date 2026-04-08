@@ -13,7 +13,7 @@ struct AppContainer {
         let parserFactory = SourceParserFactory()
         let pipeline = SourcePipeline(repository: repository, parserFactory: parserFactory)
         let signalEngine = SignalEngine()
-        let briefComposer = BriefComposer(repository: repository, generator: LocalBriefGenerator())
+        let briefComposer = BriefComposer(repository: repository, generator: MalcomeBriefGenerator())
 
         return AppContainer(
             repository: repository,
