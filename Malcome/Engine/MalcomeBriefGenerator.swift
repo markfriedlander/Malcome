@@ -158,30 +158,34 @@ enum DraftComposer {
     private static func composeFullBrief(_ input: BriefingInput) -> String {
         var paragraphs: [String] = []
 
-        // Lead signal — always first paragraph
         if let lead = input.signals.first {
             paragraphs.append(composeLeadSignal(lead))
         }
 
-        // Secondary signals
         for packet in input.signals.dropFirst() {
             paragraphs.append(composeSecondarySignal(packet))
         }
 
-        // Transition + watchlist
         if !input.watchlistCandidates.isEmpty {
-            // Add transition sentence to the last signal paragraph
             if !paragraphs.isEmpty {
                 paragraphs[paragraphs.count - 1] += " The rest of today's radar is earlier — names that are showing up but have not crossed the corroboration line yet."
             }
             paragraphs.append(composeWatchlistParagraph(input.watchlistCandidates))
+        } else if input.signals.count == 1 {
+            // Thin-data case: only one signal, no watchlist. Expand the read.
+            let lead = input.signals[0]
+            let domain = lead.signal.domain.label.lowercased()
+            if lead.recentMentions > 0 && lead.priorMentions > 0 {
+                paragraphs.append("This is not a one-off sighting. The current evidence is fresh, but there is stored history behind it too. That combination — live corroboration plus a prior track record — is what separates a real signal from noise.")
+            } else {
+                paragraphs.append("The \(domain) radar is thin right now. One signal does not make a pattern. But when the corroboration is this clean, it is worth leading with even if the rest of the surface is still quiet.")
+            }
         }
 
-        // Source influence highlight — woven into the end if present
         if let highlight = input.sourceInfluenceHighlights.first {
             let lastIndex = paragraphs.count - 1
             if lastIndex >= 0 {
-                paragraphs[lastIndex] += " " + highlight
+                paragraphs[lastIndex] += " " + cleanEvidence(highlight)
             }
         }
 
@@ -193,9 +197,10 @@ enum DraftComposer {
     private static func composeLeadSignal(_ packet: BriefingInput.SignalPacket) -> String {
         let name = packet.signal.canonicalName
         let sources = packet.sourceNames
-        let evidence = MalcomeTokenEstimator.truncateAtSentenceBoundary(
+        let domain = packet.signal.domain.label.lowercased()
+        let evidence = cleanEvidence(MalcomeTokenEstimator.truncateAtSentenceBoundary(
             packet.signal.evidenceSummary, maxChars: BriefCaps.maxEvidenceSummaryChars
-        )
+        ))
 
         var sentences: [String] = []
         sentences.append("\(name) is the one right now.")
@@ -206,12 +211,12 @@ enum DraftComposer {
 
         if sources.count >= 3 {
             let sourceList = sources.prefix(3).joined(separator: ", ")
-            sentences.append("When \(sourceList) are all noticing the same person independently, that kind of agreement is hard to fake.")
+            sentences.append("When \(sourceList) are all noticing the same name independently across different parts of the \(domain) surface, that kind of agreement is hard to fake.")
         } else if sources.count == 2 {
             let sourceList = sources.joined(separator: " and ")
-            sentences.append("\(sourceList) are both picking up on this independently.")
+            sentences.append("\(sourceList) are both picking up on this independently — two different lanes in \(domain) arriving at the same conclusion.")
         } else if let source = sources.first {
-            sentences.append("The signal is coming through \(source).")
+            sentences.append("The signal is coming through \(source), which has a track record of being right early in \(domain).")
         }
 
         return sentences.joined(separator: " ")
@@ -222,9 +227,10 @@ enum DraftComposer {
     private static func composeSecondarySignal(_ packet: BriefingInput.SignalPacket) -> String {
         let name = packet.signal.canonicalName
         let sources = packet.sourceNames
-        let evidence = MalcomeTokenEstimator.truncateAtSentenceBoundary(
+        let domain = packet.signal.domain.label.lowercased()
+        let evidence = cleanEvidence(MalcomeTokenEstimator.truncateAtSentenceBoundary(
             packet.signal.evidenceSummary, maxChars: BriefCaps.maxEvidenceSummaryChars
-        )
+        ))
         let movement = packet.signal.movement
 
         var sentences: [String] = []
@@ -237,7 +243,7 @@ enum DraftComposer {
             }
             if sources.count >= 2 {
                 let sourceList = sources.joined(separator: " and ")
-                sentences.append("\(sourceList) — both picking up the same name in the same cycle. I have learned to pay attention when that happens.")
+                sentences.append("\(sourceList) — both picking up the same name in the same cycle. I have learned to pay attention when that happens in \(domain).")
             }
 
         case .rising:
@@ -246,7 +252,7 @@ enum DraftComposer {
                 sentences.append(evidence)
             }
             if sources.count >= 2 {
-                sentences.append("The support is coming from \(sources.joined(separator: " and ")), which is the right kind of spread.")
+                sentences.append("The support is coming from \(sources.joined(separator: " and ")), which is the right kind of spread across \(domain).")
             }
 
         case .stable:
@@ -254,7 +260,7 @@ enum DraftComposer {
             if !evidence.isEmpty {
                 sentences.append(evidence)
             }
-            sentences.append("Consistency at this stage usually means something real underneath.")
+            sentences.append("Consistency at this stage in \(domain) usually means something real underneath.")
 
         case .declining:
             sentences.append("I had \(name) on the radar last cycle.")
@@ -272,21 +278,22 @@ enum DraftComposer {
 
         for (index, candidate) in candidates.enumerated() {
             let name = candidate.title
-            let whyNow = MalcomeTokenEstimator.truncateAtSentenceBoundary(
+            let domain = candidate.domain.label.lowercased()
+            let whyNow = cleanEvidence(MalcomeTokenEstimator.truncateAtSentenceBoundary(
                 candidate.whyNow, maxChars: BriefCaps.maxWhyNowChars
-            )
+            ))
 
             switch candidate.stage {
             case .corroborating:
                 if index == 0 {
-                    parts.append("\(name) keeps turning up across editorial and discovery, which is the right kind of pattern.")
+                    parts.append("\(name) keeps turning up across different \(domain) lanes, which is the right kind of pattern.")
                 } else {
-                    parts.append("\(name) is corroborating across \(candidate.sourceFamilyCount) source families.")
+                    parts.append("\(name) is corroborating across \(candidate.sourceFamilyCount) independent source families in \(domain).")
                 }
                 parts.append("One more independent confirmation and this moves from watch to signal.")
 
             case .forming:
-                parts.append("\(name) keeps showing up but only in \(candidate.sourceFamilyCount) lane\(candidate.sourceFamilyCount == 1 ? "" : "s") so far.")
+                parts.append("\(name) keeps showing up in \(domain) but only in \(candidate.sourceFamilyCount) lane\(candidate.sourceFamilyCount == 1 ? "" : "s") so far.")
                 if !whyNow.isEmpty {
                     parts.append(whyNow)
                 }
@@ -295,7 +302,7 @@ enum DraftComposer {
                 if index == candidates.count - 1 || candidates.count <= 2 {
                     parts.append("And I want you to know the name \(name).")
                 } else {
-                    parts.append("\(name) just registered for the first time.")
+                    parts.append("\(name) just registered for the first time in \(domain).")
                 }
                 if !whyNow.isEmpty {
                     parts.append(whyNow)
@@ -317,7 +324,6 @@ enum DraftComposer {
 
         var paragraphs: [String] = []
 
-        let lead = input.watchlistCandidates[0]
         let domainPhrase = input.domainMix.isEmpty
             ? "today's source mix"
             : input.domainMix.joined(separator: " and ").lowercased()
@@ -329,7 +335,7 @@ enum DraftComposer {
         paragraphs.append("None of this is a signal yet. That is the honest read. But these are the names I would want to know if I were you, and I will tell you the moment one of them breaks through.")
 
         if let highlight = input.sourceInfluenceHighlights.first {
-            paragraphs[paragraphs.count - 1] += " " + highlight
+            paragraphs[paragraphs.count - 1] += " " + cleanEvidence(highlight)
         }
 
         return paragraphs.joined(separator: "\n\n")
@@ -339,5 +345,19 @@ enum DraftComposer {
 
     private static func composeEmptyState() -> String {
         "Malcome has not landed enough corroboration yet to give you a real read. The source network is still building. I will have something when independent lanes start agreeing."
+    }
+
+    // MARK: - Evidence Cleaning
+
+    private static func cleanEvidence(_ text: String) -> String {
+        var cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Strip all bullet characters (leading and embedded)
+        cleaned = cleaned.replacingOccurrences(of: "• ", with: "")
+        cleaned = cleaned.replacingOccurrences(of: "•", with: "")
+        // Strip leading dash/asterisk bullets
+        while cleaned.hasPrefix("- ") || cleaned.hasPrefix("* ") {
+            cleaned = String(cleaned.dropFirst(2))
+        }
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
