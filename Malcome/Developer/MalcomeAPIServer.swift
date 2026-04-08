@@ -61,6 +61,7 @@ class MalcomeAPIServer {
     // Non-persistent voice prompt overrides (session-only)
     private var briefPromptOverride: String?
     private var chatPromptOverride: String?
+    private var lastIdentityResetAt: Date?
 
     var activeBriefPrompt: String {
         briefPromptOverride ?? MalcomeVoicePrompts.briefPrompt
@@ -474,6 +475,19 @@ class MalcomeAPIServer {
             SourcePipeline.devCadenceFloorSeconds = nil
             return (200, #"{"status":"ok","command":"SET_POLITENESS_MODE","mode":"production"}"#)
 
+        } else if trimmed == "RESET_IDENTITY_GRAPH" {
+            guard let model = appModel else {
+                return (503, #"{"error":"AppViewModel unavailable"}"#)
+            }
+            do {
+                try await model.container.repository.resetIdentityGraph()
+                lastIdentityResetAt = Date()
+                let timestamp = lastIdentityResetAt!.ISO8601Format()
+                return (200, "{\"status\":\"ok\",\"command\":\"RESET_IDENTITY_GRAPH\",\"resetAt\":\(jsonEscape(timestamp))}")
+            } catch {
+                return (500, "{\"error\":\(jsonEscape(error.localizedDescription))}")
+            }
+
         } else if trimmed == "NEW_BRIEF_CYCLE" {
             guard let model = appModel else {
                 return (503, #"{"error":"AppViewModel unavailable"}"#)
@@ -540,6 +554,7 @@ class MalcomeAPIServer {
           "signalCount": \(signalCount),
           "watchlistCount": \(watchlistCount),
           "lastRefreshAt": \(jsonEscape(lastRefreshAt)),
+          "lastIdentityResetAt": \(jsonEscape(lastIdentityResetAt?.ISO8601Format() ?? "never")),
           "connectionURL": \(jsonEscape(connectionURL)),
           "token": \(jsonEscape(apiToken))
         }

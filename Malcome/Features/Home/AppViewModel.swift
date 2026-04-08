@@ -17,6 +17,7 @@ final class AppViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     let container: AppContainer
+    let loadingMessages = LoadingMessageProvider()
 
     init(container: AppContainer) {
         self.container = container
@@ -58,11 +59,17 @@ final class AppViewModel: ObservableObject {
         isRefreshing = true
         errorMessage = nil
         refreshWarning = nil
+        let activeDomains = Set(sourceStatuses.filter(\.source.enabled).map(\.source.domain))
+        loadingMessages.start(activeDomains: activeDomains)
 
         do {
             try await container.repository.seedSourcesIfNeeded(container.sourceRegistry.initialSeeds())
             let report = try await container.sourcePipeline.refreshEnabledSources()
             let observations = try await container.repository.fetchObservations(limit: 500)
+            await ExcerptDistiller.distillNewObservations(
+                observations: observations,
+                repository: container.repository
+            )
             let sources = try await container.repository.fetchSources()
             let runHistory = try await container.repository.recentSignalRuns(limit: 400)
             let pathwayStats = try await container.repository.fetchPathwayStats(limit: 200)
@@ -100,6 +107,7 @@ final class AppViewModel: ObservableObject {
         }
 
         isRefreshing = false
+        loadingMessages.stop()
     }
 
     func setSourceEnabled(sourceID: String, isEnabled: Bool) async {

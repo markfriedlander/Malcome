@@ -448,10 +448,20 @@ When the Bandcamp Daily RSS feed provides titles in "Artist, Artist, 'Release Ti
 Reason:
 The RSS feed title is a full credit string (e.g. "Earl Sweatshirt, MIKE & SURF GANG, 'POMPEII // UTILITY'"). When this enters entity resolution as a single canonical entity, the brief reads "Earl Sweatshirt, MIKE & SURF GANG, 'POMPEII // UTILITY' is the one right now" — which sounds like a system log, not a cultural radar. The entity should resolve to "Earl Sweatshirt" (the lead artist) with the full title preserved as the observation title. The RSS item's dc:creator field often carries the artist name separately and should be preferred for entity resolution when available.
 
+## Targeted identity graph reset
+
+Decision:
+Malcome should support a surgical reset of the identity resolution layer that deletes canonical entities, aliases, source roles, entity history, and stage snapshots while preserving observations, signal runs, pathway history, source influence stats, and brief history. After the reset, the signal engine re-resolves canonical entities from existing observations on the next refresh.
+
+Reason:
+When parser fixes change how entity names are extracted (e.g. the Bandcamp Daily credit-string fix), existing canonical entities keep their old names because the identity graph persists across refreshes. A targeted reset forces re-resolution against current parser behavior without losing observation history. This is a dev tool first but is robust enough for production use if the identity graph ever becomes badly corrupted.
+
 ## Article body ingestion for source context
 
 Decision:
-Malcome should eventually store article body text alongside observation metadata so AFM can read actual source content before writing briefs and chat responses.
+Malcome should eventually store article body text alongside observation metadata so AFM can read actual source content before writing briefs and chat responses. At parse time, fetch and store 500 to 800 words of article body text in a bodyExcerpt field on ObservationRecord. At brief generation time, run through the summarizer for a verified 2 to 3 sentence context summary. Store raw, summarize at generation time.
 
 Reason:
-Currently the pipeline ingests structured metadata — title, author, tags, excerpt. It knows The Quietus wrote about an artist but not what they said. If the parser also fetched and stored article body text, AFM could read the actual source content and pull culturally relevant context: what kind of artist this is, what makes this release interesting, why the publication thought it mattered. Wikipedia gives the who. The source article gives the why right now. Together they give Malcome something real to say beyond the corroboration pattern. This is a meaningful pipeline expansion but is the right long-term direction. The observation excerpt field is the best available proxy until this capability exists.
+Currently the pipeline ingests structured metadata — title, author, tags, excerpt. It knows The Quietus wrote about an artist but not what they said. If the parser also fetched and stored article body text, AFM could read the actual source content and pull culturally relevant context: what kind of artist this is, what makes this release interesting, why the publication thought it mattered. Wikipedia gives the who. The source article gives the why right now. Together they give Malcome something real to say beyond the corroboration pattern.
+
+The distilledExcerpt field is the first step toward this architecture. It uses the same pattern — small AFM call at ingest time, entity-specific extraction, stored for downstream use — at a smaller scope. When article body ingestion is built, it follows the same pipeline: store raw body text, use AFM at generation time for verified contextual summaries.

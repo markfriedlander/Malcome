@@ -91,6 +91,15 @@ struct HomeView: View {
                 .buttonStyle(.plain)
                 .disabled(appModel.isRefreshing)
             }
+
+            if appModel.isRefreshing, !appModel.loadingMessages.currentMessage.isEmpty {
+                Text(appModel.loadingMessages.currentMessage)
+                    .font(.caption)
+                    .foregroundStyle(MalcomePalette.secondary)
+                    .italic()
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.5), value: appModel.loadingMessages.currentMessage)
+            }
         }
         .padding(20)
         .background(

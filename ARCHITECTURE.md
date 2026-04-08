@@ -186,6 +186,16 @@ scraped at
 published at when available
 historical tags when the observation entered via archive backfill
 
+Observation excerpt distillation:
+
+Observations may carry a distilledExcerpt field alongside the raw excerpt.
+When a new observation is stored and has article excerpt text, a small AFM call extracts the single most informative sentence about the entity being discussed.
+The AFM call uses a fresh LanguageModelSession, used once, discarded immediately.
+The distillation prompt asks for one factual, entity-specific sentence with no editorializing.
+DraftComposer uses distilledExcerpt when available, falls back to cleaned raw excerpt, falls back to no excerpt.
+If AFM is unavailable at ingest time, the distilledExcerpt field is left empty. This is not a failure.
+This is the first step toward full article body ingestion, which would store 500 to 800 words of body text and summarize at generation time.
+
 Observation identity rule:
 
 Observation IDs must be stable across app launches and refreshes.

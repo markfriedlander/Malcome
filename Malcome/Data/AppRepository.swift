@@ -269,6 +269,7 @@ actor AppRepository {
                 publishedAt: draft.publishedAt,
                 scrapedAt: draft.scrapedAt,
                 excerpt: draft.excerpt,
+                distilledExcerpt: nil,
                 normalizedEntityName: draft.normalizedEntityName,
                 rawPayload: draft.rawPayload
             )
@@ -289,7 +290,7 @@ actor AppRepository {
         var sql = """
         SELECT id, source_id, snapshot_id, canonical_entity_id, external_id_or_hash, title, subtitle, url,
                author_or_artist, tags_json, location, published_at, scraped_at,
-               excerpt, normalized_entity_name, raw_payload, domain, entity_type
+               excerpt, normalized_entity_name, raw_payload, domain, entity_type, distilled_excerpt
         FROM observation
         """
         var values: [SQLValue] = []
@@ -322,6 +323,7 @@ actor AppRepository {
                 publishedAt: date(statement, 11),
                 scrapedAt: requiredDate(statement, 12),
                 excerpt: nullableText(statement, 13),
+                distilledExcerpt: nullableText(statement, 18),
                 normalizedEntityName: text(statement, 14),
                 rawPayload: text(statement, 15)
             )
@@ -620,6 +622,17 @@ actor AppRepository {
                 values: [.text(canonicalEntityID), .text(observationID)]
             )
         }
+    }
+
+    func resetIdentityGraph() throws {
+        // Surgical delete of the identity resolution layer only.
+        // Order matters due to foreign key constraints.
+        try execute("DELETE FROM entity_stage_snapshot", values: [])
+        try execute("DELETE FROM entity_source_role", values: [])
+        try execute("DELETE FROM entity_alias", values: [])
+        try execute("DELETE FROM canonical_entity", values: [])
+        try execute("DELETE FROM entity_history", values: [])
+        try execute("UPDATE observation SET canonical_entity_id = ''", values: [])
     }
 
     func replaceEntityStageSnapshots(_ snapshots: [EntityStageSnapshotRecord]) throws {
@@ -1135,7 +1148,7 @@ actor AppRepository {
             """
             SELECT id, source_id, snapshot_id, canonical_entity_id, external_id_or_hash, title, subtitle, url,
                    author_or_artist, tags_json, location, published_at, scraped_at,
-                   excerpt, normalized_entity_name, raw_payload, domain, entity_type
+                   excerpt, normalized_entity_name, raw_payload, domain, entity_type, distilled_excerpt
             FROM observation
             WHERE canonical_entity_id = ?
             ORDER BY scraped_at DESC
@@ -1160,6 +1173,7 @@ actor AppRepository {
                 publishedAt: date(statement, 11),
                 scrapedAt: requiredDate(statement, 12),
                 excerpt: nullableText(statement, 13),
+                distilledExcerpt: nullableText(statement, 18),
                 normalizedEntityName: text(statement, 14),
                 rawPayload: text(statement, 15)
             )
@@ -1246,8 +1260,8 @@ actor AppRepository {
             INSERT INTO observation (
                 id, source_id, snapshot_id, canonical_entity_id, external_id_or_hash, title, subtitle, url,
                 author_or_artist, tags_json, location, published_at, scraped_at, excerpt,
-                normalized_entity_name, raw_payload, domain, entity_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                normalized_entity_name, raw_payload, domain, entity_type, distilled_excerpt
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             values: [
                 .text(observation.id),
@@ -1268,7 +1282,15 @@ actor AppRepository {
                 .text(observation.rawPayload),
                 .text(observation.domain.rawValue),
                 .text(observation.entityType.rawValue),
+                .nullOrText(observation.distilledExcerpt),
             ]
+        )
+    }
+
+    func updateDistilledExcerpt(observationID: String, distilledExcerpt: String) throws {
+        try execute(
+            "UPDATE observation SET distilled_excerpt = ? WHERE id = ?",
+            values: [.text(distilledExcerpt), .text(observationID)]
         )
     }
 
@@ -1416,6 +1438,7 @@ actor AppRepository {
             """,
             values: []
         )
+        try addColumnIfNeeded(database: database, table: "observation", column: "distilled_excerpt", definition: "TEXT")
         try addColumnIfNeeded(database: database, table: "observation", column: "canonical_entity_id", definition: "TEXT NOT NULL DEFAULT ''")
         try addColumnIfNeeded(database: database, table: "observation", column: "domain", definition: "TEXT NOT NULL DEFAULT 'general_culture'")
         try addColumnIfNeeded(database: database, table: "observation", column: "entity_type", definition: "TEXT NOT NULL DEFAULT 'unknown'")

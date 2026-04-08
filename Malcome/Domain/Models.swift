@@ -363,6 +363,7 @@ struct ObservationRecord: Identifiable, Codable, Hashable, Sendable {
     let publishedAt: Date?
     let scrapedAt: Date
     let excerpt: String?
+    let distilledExcerpt: String?
     let normalizedEntityName: String
     let rawPayload: String
 

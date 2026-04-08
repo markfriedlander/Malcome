@@ -353,18 +353,89 @@ enum DraftComposer {
     // MARK: - Excerpt Context
 
     private static func bestExcerptContext(from observations: [ObservationRecord]) -> String? {
-        // Find the best non-trivial excerpt to give the reader context about the cultural object
-        let candidates = observations.compactMap { obs -> String? in
-            guard let excerpt = obs.excerpt else { return nil }
-            let cleaned = cleanEvidence(excerpt)
-            // Skip trivial excerpts that are just "Surfacing on [source]" placeholders
-            if cleaned.hasPrefix("Surfacing on ") { return nil }
-            if cleaned.count < 20 { return nil }
-            return cleaned
+        let entityName = observations.first?.authorOrArtist ?? observations.first?.normalizedEntityName ?? ""
+
+        // Prefer distilled excerpts (AFM-extracted, entity-specific)
+        for obs in observations {
+            if let distilled = obs.distilledExcerpt, !distilled.isEmpty {
+                let cleaned = cleanEvidence(distilled)
+                if cleaned.count >= 20 {
+                    return MalcomeTokenEstimator.truncateAtSentenceBoundary(cleaned, maxChars: 200)
+                }
+            }
         }
 
-        guard let best = candidates.first else { return nil }
-        return MalcomeTokenEstimator.truncateAtSentenceBoundary(best, maxChars: 200)
+        // Fall back to cleaned raw excerpts
+        let candidates: [(String, Bool)] = observations.compactMap { obs in
+            guard let excerpt = obs.excerpt else { return nil }
+            let cleaned = cleanExcerptForBrief(excerpt, entityName: entityName)
+            if cleaned.count < 25 { return nil }
+            let mentionsEntity = !entityName.isEmpty && cleaned.localizedCaseInsensitiveContains(entityName)
+            return (cleaned, mentionsEntity)
+        }
+
+        // Prefer sentences that mention the entity name — those give specific context
+        if let entitySpecific = candidates.first(where: { $0.1 }) {
+            return MalcomeTokenEstimator.truncateAtSentenceBoundary(entitySpecific.0, maxChars: 200)
+        }
+
+        // Fall back to any non-generic excerpt
+        if let fallback = candidates.first(where: { !isGenericEditorialObservation($0.0) }) {
+            return MalcomeTokenEstimator.truncateAtSentenceBoundary(fallback.0, maxChars: 200)
+        }
+
+        // No excerpt is better than a misleading one
+        return nil
+    }
+
+    private static func cleanExcerptForBrief(_ text: String, entityName: String) -> String {
+        var cleaned = cleanEvidence(text)
+
+        // Skip trivial placeholders
+        if cleaned.hasPrefix("Surfacing on ") { return "" }
+
+        // Strip leading "Title by Artist" caption patterns (common in RSS descriptions)
+        // Pattern: "TITLE by ARTIST rest of text..." or "TITLE — ARTIST rest of text..."
+        let captionPatterns = [
+            #"^.{1,80}\s+by\s+.{1,80}\s+"#,
+            #"^.{1,80}\s+[–—-]\s+.{1,80}\s+"#,
+        ]
+        for pattern in captionPatterns {
+            if let range = cleaned.range(of: pattern, options: .regularExpression) {
+                let remainder = String(cleaned[range.upperBound...]).trimmingCharacters(in: .whitespaces)
+                // Only strip if there's meaningful text after the caption
+                if remainder.count > 30 {
+                    cleaned = remainder
+                    break
+                }
+            }
+        }
+
+        // Find first natural sentence boundary if text starts mid-sentence
+        if let firstChar = cleaned.first, firstChar.isLowercase {
+            // Starts with lowercase — likely mid-sentence from a truncated description
+            if let sentenceStart = cleaned.range(of: #"\.\s+[A-Z]"#, options: .regularExpression) {
+                let afterPeriod = cleaned[sentenceStart.upperBound...]
+                if afterPeriod.count > 30 {
+                    // Back up to include the capital letter
+                    let startIndex = cleaned.index(before: sentenceStart.upperBound)
+                    cleaned = String(cleaned[startIndex...])
+                }
+            }
+        }
+
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func isGenericEditorialObservation(_ text: String) -> Bool {
+        // Reject sentences that are purely generic observations with no entity-specific content
+        let genericPatterns = [
+            #"(?i)^as a (medium|genre|format|form)"#,
+            #"(?i)^(the|this) (genre|medium|format|scene|industry)"#,
+            #"(?i)^in (recent|the past|today's)"#,
+            #"(?i)^(music|art|film|fashion|design) (has|is|continues)"#,
+        ]
+        return genericPatterns.contains { text.range(of: $0, options: .regularExpression) != nil }
     }
 
     private static func entityTypePhrase(_ entityType: EntityType) -> String {
