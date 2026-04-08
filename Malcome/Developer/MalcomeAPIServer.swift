@@ -245,12 +245,13 @@ class MalcomeAPIServer {
 
     private func route(_ req: ParsedRequest) async -> (Int, String) {
         switch (req.method, req.path) {
-        case ("POST", "/brief"):   return await handleBrief(body: req.body)
-        case ("GET", "/brief"):    return await handleGetBrief()
-        case ("POST", "/chat"):    return await handleChat(body: req.body)
-        case ("POST", "/command"): return await handleCommand(body: req.body)
-        case ("GET", "/state"):    return await handleState()
-        default:                   return (404, #"{"error":"Not found"}"#)
+        case ("POST", "/brief"):    return await handleBrief(body: req.body)
+        case ("GET", "/brief"):     return await handleGetBrief()
+        case ("GET", "/pipeline"):  return await handlePipeline()
+        case ("POST", "/chat"):     return await handleChat(body: req.body)
+        case ("POST", "/command"):  return await handleCommand(body: req.body)
+        case ("GET", "/state"):     return await handleState()
+        default:                    return (404, #"{"error":"Not found"}"#)
         }
     }
 
@@ -343,6 +344,81 @@ class MalcomeAPIServer {
           "body": \(jsonEscape(brief.body)),
           "generatedAt": \(jsonEscape(brief.generatedAt.ISO8601Format())),
           "citationCount": \(brief.citationsPayload.count)
+        }
+        """
+        return (200, output)
+    }
+
+    // MARK: - GET /pipeline
+
+    private func handlePipeline() async -> (Int, String) {
+        guard let model = appModel else {
+            return (503, #"{"error":"AppViewModel unavailable"}"#)
+        }
+
+        let state = await MainActor.run {
+            (
+                sourceStatuses: model.sourceStatuses,
+                signals: model.signals,
+                watchlist: model.watchlist,
+                lastRefreshAt: model.lastRefreshAt,
+                refreshSummary: model.refreshSummary,
+                refreshWarning: model.refreshWarning,
+                isRefreshing: model.isRefreshing
+            )
+        }
+
+        let totalSources = state.sourceStatuses.count
+        let enabledSources = state.sourceStatuses.filter(\.source.enabled)
+        let healthySources = enabledSources.filter { $0.latestSnapshot?.status == .success }
+        let failedSources = enabledSources.filter { $0.latestSnapshot?.status == .failed }
+        let skippedSources = enabledSources.filter { $0.latestSnapshot?.status == .skipped }
+        let backoffSources = enabledSources.filter { source in
+            if let until = source.source.backoffUntil, until > Date() { return true }
+            return false
+        }
+        let totalObservations = healthySources.reduce(0) { $0 + ($1.latestSnapshot?.itemCount ?? 0) }
+
+        let sourceDetails = state.sourceStatuses.map { status -> String in
+            let name = status.source.name
+            let enabled = status.source.enabled
+            let snapshotStatus = status.latestSnapshot?.status.rawValue ?? "none"
+            let items = status.latestSnapshot?.itemCount ?? 0
+            let error = status.latestSnapshot?.errorMessage ?? ""
+            let backoff = status.source.backoffUntil.map { $0 > Date() ? "active" : "expired" } ?? "none"
+            let failures = status.source.consecutiveFailures
+
+            let errorField = error.isEmpty ? "" : ", \"error\": \(jsonEscape(error))"
+            return """
+                  {
+                    "name": \(jsonEscape(name)),
+                    "enabled": \(enabled),
+                    "status": \(jsonEscape(snapshotStatus)),
+                    "items": \(items),
+                    "backoff": \(jsonEscape(backoff)),
+                    "consecutiveFailures": \(failures)\(errorField)
+                  }
+            """
+        }.joined(separator: ",\n")
+
+        let output = """
+        {
+          "lastRefreshAt": \(jsonEscape(state.lastRefreshAt?.ISO8601Format() ?? "never")),
+          "isRefreshing": \(state.isRefreshing),
+          "refreshSummary": \(jsonEscape(state.refreshSummary ?? "none")),
+          "refreshWarning": \(jsonEscape(state.refreshWarning ?? "none")),
+          "totalSources": \(totalSources),
+          "enabledSources": \(enabledSources.count),
+          "healthySources": \(healthySources.count),
+          "failedSources": \(failedSources.count),
+          "skippedSources": \(skippedSources.count),
+          "backoffSources": \(backoffSources.count),
+          "totalObservationsLastRefresh": \(totalObservations),
+          "activeSignals": \(state.signals.count),
+          "watchlistCandidates": \(state.watchlist.count),
+          "sources": [
+        \(sourceDetails)
+          ]
         }
         """
         return (200, output)
