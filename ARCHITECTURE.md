@@ -303,3 +303,95 @@ summary
 Key principle:
 
 Signals must derive from stored historical observations, not transient fetches.
+
+Voice layer:
+
+MalcomeBriefGenerator
+conforms to BriefGenerating.
+Uses Apple Foundation Models on-device only, iOS 26 minimum.
+Receives a capped BriefingInput and a static voice prompt, calls AFM, and returns a BriefRecord.
+The prose output is stored as BriefRecord.body untouched.
+If Apple Foundation Models is unavailable, the generator fails honestly with a clear user-facing message. It does not fall back to LocalBriefGenerator silently.
+LocalBriefGenerator remains in the codebase as a harness and testing reference but is not in the production brief path.
+
+BriefingInput enrichment:
+
+BriefingInput now carries all data the voice layer needs to write a complete brief without reaching back into the repository.
+
+Enriched fields:
+
+generatedAt
+signals (array of SignalPacket, capped to 3)
+watchlistCandidates (array of WatchlistCandidate, capped to 4)
+domainMix (array of String, the cultural domains represented in the current signal and watchlist set, pre-computed by BriefComposer)
+sourceInfluenceHighlights (array of String, 0 to 2 short learned-trust sentences selected by BriefComposer from SourceInfluenceStatRecord data)
+
+Each SignalPacket carries:
+
+signal (SignalCandidateRecord)
+observations (array of ObservationRecord, capped to 2 per signal)
+sourceNames (array of String, capped to 3 per signal)
+priorMentions (Int)
+recentMentions (Int)
+
+String fields on SignalCandidateRecord and WatchlistCandidate that enter the voice prompt are truncated at sentence boundaries to character caps:
+
+evidenceSummary 200 characters
+movementSummary 150 characters
+sourceInfluenceSummary 150 characters
+whyNow 200 characters
+upgradeTrigger 150 characters
+
+These caps are named constants, not magic numbers.
+
+BriefComposer applies all caps before passing BriefingInput to the generator.
+
+Signal formatting:
+
+A signal formatting step converts the capped structured data into labeled plain-line text before the AFM call.
+This is not JSON and not markdown. It is compact labeled lines optimized for on-device model readability and token efficiency.
+The formatting step lives in MalcomeBriefGenerator because it is part of prompt assembly, not data assembly.
+
+Token budget:
+
+Hard ceiling is 4096 tokens.
+Usable budget is 80 percent of ceiling (3276 tokens).
+Character-based heuristic of approximately 3.5 characters per token is used until Apple provides a token counting API.
+Voice prompt allocates approximately 600 tokens.
+Capped structured data allocates approximately 800 tokens after serialization.
+Response headroom is approximately 1800 tokens.
+
+Chat layer:
+
+MalcomeChatEngine
+manages the conversational thread below the brief in HomeView.
+Each chat thread is scoped to one brief cycle and resets when a new brief generates.
+The user types a follow-up question. Malcome responds in character with the current brief and signal context available.
+
+ChatContextAssembler
+assembles the complete prompt for each chat turn.
+Pinned context includes a shorter chat variant of the voice prompt, the current brief body (truncated if needed), top signal candidates with capped evidence, and top watchlist candidates.
+Recent conversation turns (last 2 to 3 exchanges) are included verbatim.
+Older conversation turns are compressed using a two-stage summarize-then-verify pipeline adapted from Hal's TextSummarizer.
+The summarizer is called blocking before the chat response, not as a fire-and-forget task.
+The summarizer is applied only to unstructured conversation prose. Structured signal data is never summarized, only capped.
+
+TextSummarizer (adapted from Hal):
+
+Stage 1: AFM compresses older conversation turns into a prose summary targeting approximately 300 tokens.
+Stage 2: Each sentence in the summary is verified against the source turn sentences using NLEmbedding sentence similarity. Sentences below a similarity threshold of 0.72 are replaced with the nearest grounded source sentence. This prevents hallucinated conversation content.
+TF-IDF fallback is available if NLEmbedding is unavailable.
+The summarizer is skipped entirely if older history fits within the token budget without compression.
+
+Chat message storage:
+
+chat_messages table in the existing SQLite database.
+Fields: id, brief_id (foreign key to current brief cycle), role (user or malcome), content, timestamp, embedding (NLEmbedding blob for future semantic search).
+Rows are deleted when a new brief generates.
+
+Voice prompt:
+
+Two static variants share the same Malcome character definition but differ in task instruction.
+The brief variant instructs Malcome to write a cultural radar brief.
+The chat variant instructs Malcome to respond to a follow-up question in character using the provided context.
+Both variants are collaborative artifacts reviewed before they ship.
