@@ -77,6 +77,16 @@ enum MalcomeLoadingMessages {
         "Looking at a map of a scene that doesn't know it's a scene yet",
         "Making a call that won't make sense for another year",
         "Waiting for a source to call back",
+        "Checking the guest list at a show that sold out in 4 minutes",
+        "On the phone with a producer whose name you'll know in six months",
+        "At a soundcheck nobody was supposed to attend",
+        "Reading a review that got it right three years early",
+        "In a city you'd never expect this to start from",
+        "Watching the second night because the first one was too obvious",
+        "At a residency that isn't on the website yet",
+        "On a train between two cities that both think they discovered it",
+        "In a record shop where the owner doesn't tell everyone everything",
+        "Somewhere between the tip and the confirmation",
     ]
 
     static let allMessages: [String] = musicMessages + filmMessages + artMessages + generalMessages

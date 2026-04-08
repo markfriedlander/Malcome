@@ -22,18 +22,27 @@ enum BriefCaps {
 struct MalcomeBriefGenerator: BriefGenerating {
 
     private static let polishPrompt = """
-    Lightly edit the text below for natural flow. Change as little as possible. Keep the first-person voice, the short sentences, and the calm tone exactly as they are. Do not add new words like "standout", "intriguing", "promising", "traction", "waves", "buzzing", "exciting", or "undeniable." Output the edited text only, nothing else.
+    Lightly edit the text below for natural flow. Change as little as possible. Keep the first-person voice, the short sentences, and the calm tone exactly as they are. Keep all citation markers like [1] and [2] exactly where they are. Do not add new words like "standout", "intriguing", "promising", "traction", "waves", "buzzing", "exciting", or "undeniable." Output the edited text only, nothing else.
 
     TEXT:
     """
 
     func generateBrief(from input: BriefingInput) async throws -> BriefRecord {
         let capped = capInput(input)
-        let draft = DraftComposer.compose(from: capped)
-        let body = await polishWithAFM(draft)
+        let draftResult = DraftComposer.compose(from: capped)
+        let body = await polishWithAFM(draftResult.text)
         let title = briefTitle(from: capped)
 
-        let citations = buildCitations(from: capped)
+        let citations = draftResult.sourceReferences.enumerated().map { index, ref in
+            BriefCitation(
+                id: "cite-\(index)",
+                signalName: "",
+                sourceName: ref.sourceName,
+                observationTitle: ref.observationTitle,
+                url: ref.url,
+                note: ref.excerpt
+            )
+        }
 
         return BriefRecord(
             id: UUID().uuidString,
@@ -104,36 +113,20 @@ struct MalcomeBriefGenerator: BriefGenerating {
         return "Malcome Radar"
     }
 
-    // MARK: - Citations
+    // Citations are now built from DraftResult.sourceReferences in generateBrief()
+}
 
-    private func buildCitations(from input: BriefingInput) -> [BriefCitation] {
-        var citations: [BriefCitation] = []
+// MARK: - Draft Result
 
-        for packet in input.signals {
-            for (index, observation) in packet.observations.prefix(2).enumerated() {
-                citations.append(BriefCitation(
-                    id: "\(packet.signal.id)-\(index)",
-                    signalName: packet.signal.canonicalName,
-                    sourceName: packet.sourceNames.first ?? "Unknown Source",
-                    observationTitle: observation.title,
-                    url: observation.url,
-                    note: observation.excerpt ?? "Observed during the latest refresh."
-                ))
-            }
-        }
+struct DraftResult {
+    let text: String
+    let sourceReferences: [SourceReference]
 
-        for (index, candidate) in input.watchlistCandidates.enumerated() {
-            citations.append(BriefCitation(
-                id: "watch-\(index)",
-                signalName: "watchlist",
-                sourceName: candidate.sourceIDs.first ?? "Unknown Source",
-                observationTitle: candidate.title,
-                url: "",
-                note: candidate.whyNow
-            ))
-        }
-
-        return citations
+    struct SourceReference {
+        let sourceName: String
+        let observationTitle: String
+        let url: String
+        let excerpt: String
     }
 }
 
@@ -141,29 +134,61 @@ struct MalcomeBriefGenerator: BriefGenerating {
 
 enum DraftComposer {
 
-    static func compose(from input: BriefingInput) -> String {
+    static func compose(from input: BriefingInput) -> DraftResult {
+        var tracker = SourceTracker()
+        let text: String
         if input.signals.isEmpty && input.watchlistCandidates.isEmpty {
-            return composeEmptyState()
+            text = composeEmptyState()
+        } else if input.signals.isEmpty {
+            text = composeWatchlistOnly(input, tracker: &tracker)
+        } else {
+            text = composeFullBrief(input, tracker: &tracker)
         }
-
-        if input.signals.isEmpty {
-            return composeWatchlistOnly(input)
-        }
-
-        return composeFullBrief(input)
+        return DraftResult(text: text, sourceReferences: tracker.references)
     }
+
+    // Legacy string-only access for chat engine
+    static func composeText(from input: BriefingInput) -> String {
+        compose(from: input).text
+    }
+
+    private struct SourceTracker {
+        private(set) var references: [DraftResult.SourceReference] = []
+        private var seenURLs: Set<String> = []
+
+        mutating func cite(sourceName: String, observation: ObservationRecord?) -> String {
+            let url = observation?.url ?? ""
+            if !url.isEmpty, seenURLs.contains(url) {
+                // Already cited — find existing index
+                if let idx = references.firstIndex(where: { $0.url == url }) {
+                    return " [\(idx + 1)]"
+                }
+            }
+            let ref = DraftResult.SourceReference(
+                sourceName: sourceName,
+                observationTitle: observation?.title ?? "",
+                url: url,
+                excerpt: observation?.distilledExcerpt ?? observation?.excerpt ?? ""
+            )
+            references.append(ref)
+            if !url.isEmpty { seenURLs.insert(url) }
+            return " [\(references.count)]"
+        }
+    }
+
+    // This old signature is replaced by compose(from:) -> DraftResult above
 
     // MARK: - Full Brief (signals + watchlist)
 
-    private static func composeFullBrief(_ input: BriefingInput) -> String {
+    private static func composeFullBrief(_ input: BriefingInput, tracker: inout SourceTracker) -> String {
         var paragraphs: [String] = []
 
         if let lead = input.signals.first {
-            paragraphs.append(composeLeadSignal(lead))
+            paragraphs.append(composeLeadSignal(lead, tracker: &tracker))
         }
 
         for packet in input.signals.dropFirst() {
-            paragraphs.append(composeSecondarySignal(packet))
+            paragraphs.append(composeSecondarySignal(packet, tracker: &tracker))
         }
 
         if !input.watchlistCandidates.isEmpty {
@@ -194,7 +219,7 @@ enum DraftComposer {
 
     // MARK: - Lead Signal
 
-    private static func composeLeadSignal(_ packet: BriefingInput.SignalPacket) -> String {
+    private static func composeLeadSignal(_ packet: BriefingInput.SignalPacket, tracker: inout SourceTracker) -> String {
         let name = packet.signal.canonicalName
         let sources = packet.sourceNames
         let domain = packet.signal.domain.label.lowercased()
@@ -204,7 +229,6 @@ enum DraftComposer {
         var sentences: [String] = []
         sentences.append("\(name) is the one right now.")
 
-        // Add entity type and excerpt context so the reader knows what this is
         if let context {
             sentences.append(context)
         } else {
@@ -214,13 +238,22 @@ enum DraftComposer {
             }
         }
 
-        if sources.count >= 3 {
-            let sourceList = sources.prefix(3).joined(separator: ", ")
+        // Build source list with inline citations
+        let citedSources = sources.prefix(3).map { sourceName -> String in
+            let obs = packet.observations.first { o in
+                sources.contains(sourceName)
+            }
+            let marker = tracker.cite(sourceName: sourceName, observation: obs)
+            return "\(sourceName)\(marker)"
+        }
+
+        if citedSources.count >= 3 {
+            let sourceList = citedSources.joined(separator: ", ")
             sentences.append("When \(sourceList) are all noticing the same name independently across different parts of the \(domain) surface, that kind of agreement is hard to fake.")
-        } else if sources.count == 2 {
-            let sourceList = sources.joined(separator: " and ")
+        } else if citedSources.count == 2 {
+            let sourceList = citedSources.joined(separator: " and ")
             sentences.append("\(sourceList) are both picking up on this independently — two different lanes in \(domain) arriving at the same conclusion.")
-        } else if let source = sources.first {
+        } else if let source = citedSources.first {
             sentences.append("The signal is coming through \(source), which has a track record of being right early in \(domain).")
         }
 
@@ -229,12 +262,18 @@ enum DraftComposer {
 
     // MARK: - Secondary Signals
 
-    private static func composeSecondarySignal(_ packet: BriefingInput.SignalPacket) -> String {
+    private static func composeSecondarySignal(_ packet: BriefingInput.SignalPacket, tracker: inout SourceTracker) -> String {
         let name = packet.signal.canonicalName
         let sources = packet.sourceNames
         let domain = packet.signal.domain.label.lowercased()
         let movement = packet.signal.movement
         let context = bestExcerptContext(from: packet.observations)
+
+        let citedSources = sources.prefix(3).map { sourceName -> String in
+            let obs = packet.observations.first { _ in true }
+            let marker = tracker.cite(sourceName: sourceName, observation: obs)
+            return "\(sourceName)\(marker)"
+        }
 
         var sentences: [String] = []
 
@@ -244,8 +283,8 @@ enum DraftComposer {
             if let context {
                 sentences.append(context)
             }
-            if sources.count >= 2 {
-                let sourceList = sources.joined(separator: " and ")
+            if citedSources.count >= 2 {
+                let sourceList = citedSources.joined(separator: " and ")
                 sentences.append("\(sourceList) — both picking up the same name in the same cycle. I have learned to pay attention when that happens in \(domain).")
             }
 
@@ -254,8 +293,8 @@ enum DraftComposer {
             if let context {
                 sentences.append(context)
             }
-            if sources.count >= 2 {
-                sentences.append("The support is coming from \(sources.joined(separator: " and ")), which is the right kind of spread across \(domain).")
+            if citedSources.count >= 2 {
+                sentences.append("The support is coming from \(citedSources.joined(separator: " and ")), which is the right kind of spread across \(domain).")
             }
 
         case .stable:
@@ -320,7 +359,7 @@ enum DraftComposer {
 
     // MARK: - Watchlist-Only Brief
 
-    private static func composeWatchlistOnly(_ input: BriefingInput) -> String {
+    private static func composeWatchlistOnly(_ input: BriefingInput, tracker: inout SourceTracker) -> String {
         if input.watchlistCandidates.isEmpty {
             return composeEmptyState()
         }

@@ -121,9 +121,7 @@ struct HomeView: View {
                     Text(brief.title)
                         .font(.title3.weight(.bold))
                         .foregroundStyle(MalcomePalette.primary)
-                    Text(brief.body)
-                        .font(.body)
-                        .foregroundStyle(MalcomePalette.primary.opacity(0.9))
+                    CitedBriefText(text: brief.body, citations: brief.citationsPayload)
                 }
                 .cardStyle()
             } else {
