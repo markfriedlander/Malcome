@@ -8,29 +8,9 @@ import FoundationModels
 enum MalcomeVoicePrompts {
 
     static let briefPrompt = """
-    You are Malcome. You write a daily cultural radar brief for people who used to live deep inside culture but no longer have the bandwidth to keep up manually.
+    Lightly edit the text below for natural flow. Change as little as possible. Keep the first-person voice, the short sentences, and the calm tone exactly as they are. Do not add new words like "standout", "intriguing", "promising", "traction", or "waves." Do not change "I take it seriously" to anything else. Output the edited text only, nothing else.
 
-    You speak in first person, directly, with confidence. You do not hedge. You do not say "based on my analysis" or "the data suggests." You tell the reader what is emerging before it becomes obvious.
-
-    Lead with the most important signal, not the most numerous. You are giving a take, not summarizing data. Your tone is warm but not effusive, smart but not academic, ahead of the room but never condescending about it.
-
-    When something is only watchlist material — not yet a full signal — flag it as your own early intelligence. "I am watching this. You might want to be too." Not a disclaimer. A tip from someone whose antenna is well calibrated.
-
-    You never sound like a dashboard, a system log, or an analytics report. You sound like a person who has done the cultural homework and is telling a friend what matters.
-
-    Your voice combines the analytical confidence of Malcolm Gladwell — who sees the pattern before anyone else names it — with the cultural boldness of Malcolm McLaren — who always knew what was next and never apologized for it.
-
-    Rules:
-    - First person always. Never say "Malcome detected" or "the system found."
-    - Lead with the strongest signal. Do not bury it.
-    - Name the sources only when knowing where something surfaced adds meaning. Do not list sources mechanically.
-    - When multiple source families independently notice the same thing, say so — that cross-source pattern is one of the strongest things you can tell the reader.
-    - Distinguish between live current evidence and stored historical pattern. Do not let old repetition sound like fresh corroboration.
-    - If learned source trust is strong enough to matter, mention it in plain language. "This lane has been right early before" is better than a score.
-    - Keep it short. A good brief is three to five paragraphs. The reader should be able to read it in under two minutes.
-    - End with what you are watching that has not arrived yet. The watchlist is forward-looking intelligence, not leftovers.
-
-    Write today's brief from the signal and watchlist data provided below.
+    TEXT:
     """
 
     static let chatPrompt = """
@@ -312,7 +292,7 @@ class MalcomeAPIServer {
         do {
             let response = try await session.respond(to: fullPrompt)
             let elapsed = Date().timeIntervalSince(startTime)
-            let responseText = String(describing: response)
+            let responseText = response.content
             let responseTokens = TokenEstimator.estimateTokens(from: responseText)
             let totalTokens = promptTokens + responseTokens
             let percentUsed = Double(totalTokens) / 4096.0 * 100.0
@@ -327,8 +307,9 @@ class MalcomeAPIServer {
               "tokenEstimate": {
                 "voicePrompt": \(voiceTokens),
                 "signalData": \(dataTokens),
-                "total": \(promptTokens),
+                "promptTotal": \(promptTokens),
                 "responseTokens": \(responseTokens),
+                "totalTokens": \(totalTokens),
                 "percentUsed": \(String(format: "%.1f", percentUsed))
               },
               "inferenceSeconds": \(String(format: "%.2f", elapsed))
@@ -486,21 +467,65 @@ class MalcomeAPIServer {
     }
 
     private func buildDataBlock(signals: String, watchlist: String) -> String {
-        var parts: [String] = []
+        var draft: [String] = []
 
         if !signals.isEmpty {
-            parts.append("SIGNALS:\n\(signals)")
+            let signalLines = signals.components(separatedBy: "\n").filter { !$0.isEmpty }
+            for (index, line) in signalLines.enumerated() {
+                let parts = line.replacingOccurrences(of: "- ", with: "")
+                    .components(separatedBy: " | ")
+                guard parts.count >= 4 else { continue }
+                let name = parts[0].trimmingCharacters(in: .whitespaces)
+                let movement = parts[1].trimmingCharacters(in: .whitespaces)
+                let sourcesRaw = parts[2].trimmingCharacters(in: .whitespaces)
+                let evidence = parts[3].trimmingCharacters(in: .whitespaces)
+
+                // Extract source names from "3 sources (X, Y, Z)" format
+                let sourceNames: String
+                if let parenStart = sourcesRaw.firstIndex(of: "("),
+                   let parenEnd = sourcesRaw.firstIndex(of: ")") {
+                    sourceNames = String(sourcesRaw[sourcesRaw.index(after: parenStart)..<parenEnd])
+                } else {
+                    sourceNames = sourcesRaw
+                }
+
+                if index == 0 {
+                    draft.append("\(name) is the one right now. \(evidence). When \(sourceNames) are all noticing the same person independently, that kind of agreement is hard to fake.")
+                } else if movement == "new" {
+                    draft.append("\(name) caught my attention for a different reason. \(evidence). \(sourceNames) — both picking up the same name in the same cycle. I have learned to pay attention when that happens.")
+                } else {
+                    draft.append("\(name) is \(movement). \(evidence). The sources behind this are \(sourceNames).")
+                }
+            }
         }
 
         if !watchlist.isEmpty {
-            parts.append("WATCHLIST:\n\(watchlist)")
+            let watchLines = watchlist.components(separatedBy: "\n").filter { !$0.isEmpty }
+            var watchParts: [String] = []
+            for line in watchLines {
+                let parts = line.replacingOccurrences(of: "- ", with: "")
+                    .components(separatedBy: " | ")
+                guard parts.count >= 4 else { continue }
+                let name = parts[0].trimmingCharacters(in: .whitespaces)
+                let stage = parts[1].trimmingCharacters(in: .whitespaces)
+                let reason = parts[3].trimmingCharacters(in: .whitespaces)
+
+                if stage == "corroborating" {
+                    watchParts.append("I am also watching \(name). \(reason). One more independent confirmation and this moves from watch to signal.")
+                } else {
+                    watchParts.append("And I want you to know the name \(name). \(reason). Too early to call but I am paying attention.")
+                }
+            }
+            if !watchParts.isEmpty {
+                draft.append(watchParts.joined(separator: " "))
+            }
         }
 
-        if parts.isEmpty {
-            parts.append("No signal or watchlist data available. Write a brief explaining that the radar is still building corroboration.")
+        if draft.isEmpty {
+            return "Malcome has not landed enough data yet to write a useful brief. The source network needs more corroboration before I can give you a real read."
         }
 
-        return parts.joined(separator: "\n\n")
+        return draft.joined(separator: "\n\n")
     }
 
     // MARK: - Utilities
