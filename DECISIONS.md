@@ -439,3 +439,19 @@ Canonical merge confidence, merge summaries, aliases, and source-role evidence s
 
 Reason:
 Malcome will not be trustworthy unless a human can audit why a signal resolved to a given identity and where ambiguity remains.
+
+## Bandcamp Daily RSS: separate artist credit from release title
+
+Decision:
+When the Bandcamp Daily RSS feed provides titles in "Artist, Artist, 'Release Title'" format, the RSS parser should detect the Bandcamp Daily source and extract the leading artist name as the entity identity, not the full credit-plus-title string.
+
+Reason:
+The RSS feed title is a full credit string (e.g. "Earl Sweatshirt, MIKE & SURF GANG, 'POMPEII // UTILITY'"). When this enters entity resolution as a single canonical entity, the brief reads "Earl Sweatshirt, MIKE & SURF GANG, 'POMPEII // UTILITY' is the one right now" — which sounds like a system log, not a cultural radar. The entity should resolve to "Earl Sweatshirt" (the lead artist) with the full title preserved as the observation title. The RSS item's dc:creator field often carries the artist name separately and should be preferred for entity resolution when available.
+
+## Article body ingestion for source context
+
+Decision:
+Malcome should eventually store article body text alongside observation metadata so AFM can read actual source content before writing briefs and chat responses.
+
+Reason:
+Currently the pipeline ingests structured metadata — title, author, tags, excerpt. It knows The Quietus wrote about an artist but not what they said. If the parser also fetched and stored article body text, AFM could read the actual source content and pull culturally relevant context: what kind of artist this is, what makes this release interesting, why the publication thought it mattered. Wikipedia gives the who. The source article gives the why right now. Together they give Malcome something real to say beyond the corroboration pattern. This is a meaningful pipeline expansion but is the right long-term direction. The observation excerpt field is the best available proxy until this capability exists.

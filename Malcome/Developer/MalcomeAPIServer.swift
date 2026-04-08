@@ -401,8 +401,11 @@ class MalcomeAPIServer {
             """
         }.joined(separator: ",\n")
 
+        let politenessMode = SourcePipeline.devCadenceFloorSeconds != nil ? "dev" : "production"
+
         let output = """
         {
+          "politenessMode": \(jsonEscape(politenessMode)),
           "lastRefreshAt": \(jsonEscape(state.lastRefreshAt?.ISO8601Format() ?? "never")),
           "isRefreshing": \(state.isRefreshing),
           "refreshSummary": \(jsonEscape(state.refreshSummary ?? "none")),
@@ -463,6 +466,14 @@ class MalcomeAPIServer {
             chatPromptOverride = nil
             return (200, #"{"status":"ok","command":"CLEAR_CHAT_PROMPT"}"#)
 
+        } else if trimmed == "SET_POLITENESS_MODE:dev" {
+            SourcePipeline.devCadenceFloorSeconds = 120
+            return (200, #"{"status":"ok","command":"SET_POLITENESS_MODE","mode":"dev","cadenceFloorSeconds":120}"#)
+
+        } else if trimmed == "SET_POLITENESS_MODE:production" || trimmed == "CLEAR_POLITENESS_MODE" {
+            SourcePipeline.devCadenceFloorSeconds = nil
+            return (200, #"{"status":"ok","command":"SET_POLITENESS_MODE","mode":"production"}"#)
+
         } else if trimmed == "NEW_BRIEF_CYCLE" {
             guard let model = appModel else {
                 return (503, #"{"error":"AppViewModel unavailable"}"#)
@@ -516,9 +527,12 @@ class MalcomeAPIServer {
             lastRefreshAt = "Unavailable"
         }
 
+        let politenessMode = SourcePipeline.devCadenceFloorSeconds != nil ? "dev" : "production"
+
         let output = """
         {
           "afmAvailable": \(afmAvailable),
+          "politenessMode": \(jsonEscape(politenessMode)),
           "voicePromptFingerprint": \(jsonEscape(briefFingerprint)),
           "chatPromptFingerprint": \(jsonEscape(chatFingerprint)),
           "briefTitle": \(jsonEscape(briefTitle)),

@@ -33,6 +33,10 @@ struct SourcePipeline: Sendable {
     let repository: AppRepository
     let parserFactory: SourceParserFactory
 
+    /// Dev mode: compress non-rate-limited cadence to this floor (in seconds).
+    /// Set via MalcomeAPIServer SET_POLITENESS_MODE:dev command. Non-persistent.
+    nonisolated(unsafe) static var devCadenceFloorSeconds: TimeInterval?
+
     func refreshEnabledSources() async throws -> RefreshReport {
         let startedAt = Date()
         let sources = try await repository.fetchSources().filter(\.enabled)
@@ -97,12 +101,20 @@ struct SourcePipeline: Sendable {
     }
 
     private func politenessSkipReason(for source: SourceRecord, now: Date) -> String? {
+        // 429 backoffs are always respected — these are real rate limits
         if let backoffUntil = source.backoffUntil, backoffUntil > now {
             return "\(source.name) is cooling off until \(Self.displayFormatter.string(from: backoffUntil)) after earlier pushback from the source."
         }
 
         if let lastAttemptAt = source.lastAttemptAt {
-            let minimumRefreshDate = lastAttemptAt.addingTimeInterval(TimeInterval(source.refreshCadenceMinutes * 60))
+            // In dev mode, use compressed cadence floor (but never below 2 minutes)
+            let cadenceSeconds: TimeInterval
+            if let devFloor = Self.devCadenceFloorSeconds {
+                cadenceSeconds = max(120, devFloor)
+            } else {
+                cadenceSeconds = TimeInterval(source.refreshCadenceMinutes * 60)
+            }
+            let minimumRefreshDate = lastAttemptAt.addingTimeInterval(cadenceSeconds)
             if minimumRefreshDate > now {
                 return "\(source.name) is waiting for its next polite refresh window at \(Self.displayFormatter.string(from: minimumRefreshDate))."
             }
@@ -1584,16 +1596,34 @@ struct RSSFeedParser: SourceParsing {
             guard !title.isEmpty, !url.isEmpty else { return nil }
 
             let excerpt = HTMLSupport.cleanText(item.description)
-            let subject = HTMLSupport.inferredEditorialEntity(
-                from: title,
-                sourceName: source.name,
-                fallbackURL: url
-            )
-            let normalized = HTMLSupport.normalizedEntityName(
-                title: subject.name,
-                author: subject.author,
-                fallbackURL: url
-            )
+            let creator = item.creator.map(HTMLSupport.cleanText) ?? ""
+
+            // When dc:creator provides a clean artist name, use it for entity resolution
+            // instead of trying to extract an entity from the full title (which may be a
+            // credit string like "Artist, Artist, 'Release Title'").
+            let subject: (name: String, entityType: EntityType, author: String?)
+            let normalized: String
+
+            if !creator.isEmpty, HTMLSupport.isMeaningfulEntityName(HTMLSupport.normalizedAlias(creator)) {
+                let cleanCreator = HTMLSupport.cleanText(creator)
+                subject = (name: cleanCreator, entityType: .creator, author: cleanCreator)
+                normalized = HTMLSupport.normalizedEntityName(
+                    title: cleanCreator,
+                    author: cleanCreator,
+                    fallbackURL: url
+                )
+            } else {
+                subject = HTMLSupport.inferredEditorialEntity(
+                    from: title,
+                    sourceName: source.name,
+                    fallbackURL: url
+                )
+                normalized = HTMLSupport.normalizedEntityName(
+                    title: subject.name,
+                    author: subject.author,
+                    fallbackURL: url
+                )
+            }
 
             guard HTMLSupport.isMeaningfulEntityName(normalized) else { return nil }
 
@@ -1615,7 +1645,7 @@ struct RSSFeedParser: SourceParsing {
                 title: title,
                 subtitle: source.name,
                 url: url,
-                authorOrArtist: subject.author ?? item.creator,
+                authorOrArtist: subject.author ?? (creator.isEmpty ? nil : creator),
                 tags: tags,
                 location: source.city == .global ? nil : source.city.displayName,
                 publishedAt: item.publishedAt,

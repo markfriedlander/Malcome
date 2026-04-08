@@ -198,15 +198,20 @@ enum DraftComposer {
         let name = packet.signal.canonicalName
         let sources = packet.sourceNames
         let domain = packet.signal.domain.label.lowercased()
-        let evidence = cleanEvidence(MalcomeTokenEstimator.truncateAtSentenceBoundary(
-            packet.signal.evidenceSummary, maxChars: BriefCaps.maxEvidenceSummaryChars
-        ))
+        let entityType = packet.signal.entityType
+        let context = bestExcerptContext(from: packet.observations)
 
         var sentences: [String] = []
         sentences.append("\(name) is the one right now.")
 
-        if !evidence.isEmpty {
-            sentences.append(evidence)
+        // Add entity type and excerpt context so the reader knows what this is
+        if let context {
+            sentences.append(context)
+        } else {
+            let typePhrase = entityTypePhrase(entityType)
+            if !typePhrase.isEmpty {
+                sentences.append(typePhrase)
+            }
         }
 
         if sources.count >= 3 {
@@ -228,18 +233,16 @@ enum DraftComposer {
         let name = packet.signal.canonicalName
         let sources = packet.sourceNames
         let domain = packet.signal.domain.label.lowercased()
-        let evidence = cleanEvidence(MalcomeTokenEstimator.truncateAtSentenceBoundary(
-            packet.signal.evidenceSummary, maxChars: BriefCaps.maxEvidenceSummaryChars
-        ))
         let movement = packet.signal.movement
+        let context = bestExcerptContext(from: packet.observations)
 
         var sentences: [String] = []
 
         switch movement {
         case .new:
             sentences.append("\(name) caught my attention for a different reason.")
-            if !evidence.isEmpty {
-                sentences.append(evidence)
+            if let context {
+                sentences.append(context)
             }
             if sources.count >= 2 {
                 let sourceList = sources.joined(separator: " and ")
@@ -248,8 +251,8 @@ enum DraftComposer {
 
         case .rising:
             sentences.append("\(name) has been building.")
-            if !evidence.isEmpty {
-                sentences.append(evidence)
+            if let context {
+                sentences.append(context)
             }
             if sources.count >= 2 {
                 sentences.append("The support is coming from \(sources.joined(separator: " and ")), which is the right kind of spread across \(domain).")
@@ -257,8 +260,8 @@ enum DraftComposer {
 
         case .stable:
             sentences.append("\(name) is still here.")
-            if !evidence.isEmpty {
-                sentences.append(evidence)
+            if let context {
+                sentences.append(context)
             }
             sentences.append("Consistency at this stage in \(domain) usually means something real underneath.")
 
@@ -345,6 +348,37 @@ enum DraftComposer {
 
     private static func composeEmptyState() -> String {
         "Malcome has not landed enough corroboration yet to give you a real read. The source network is still building. I will have something when independent lanes start agreeing."
+    }
+
+    // MARK: - Excerpt Context
+
+    private static func bestExcerptContext(from observations: [ObservationRecord]) -> String? {
+        // Find the best non-trivial excerpt to give the reader context about the cultural object
+        let candidates = observations.compactMap { obs -> String? in
+            guard let excerpt = obs.excerpt else { return nil }
+            let cleaned = cleanEvidence(excerpt)
+            // Skip trivial excerpts that are just "Surfacing on [source]" placeholders
+            if cleaned.hasPrefix("Surfacing on ") { return nil }
+            if cleaned.count < 20 { return nil }
+            return cleaned
+        }
+
+        guard let best = candidates.first else { return nil }
+        return MalcomeTokenEstimator.truncateAtSentenceBoundary(best, maxChars: 200)
+    }
+
+    private static func entityTypePhrase(_ entityType: EntityType) -> String {
+        switch entityType {
+        case .creator: return ""  // Most common, no extra context needed
+        case .collective: return "This is a collective, not a solo act — which makes the independent attention more notable."
+        case .venue: return "A venue showing up as a signal usually means the room itself is becoming a cultural node."
+        case .event, .eventSeries: return "This is an event pattern, not just a name — which means the scene is organizing around something."
+        case .publication: return ""
+        case .organization, .brand: return ""
+        case .scene: return "This is a scene-level pattern, not a single artist — which usually means the movement is broader than any one name."
+        case .concept: return ""
+        case .unknown: return ""
+        }
     }
 
     // MARK: - Evidence Cleaning
