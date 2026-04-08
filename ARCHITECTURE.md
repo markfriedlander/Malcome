@@ -306,12 +306,27 @@ Signals must derive from stored historical observations, not transient fetches.
 
 Voice layer:
 
+Architecture finding from voice prompt iteration (13 iterations against on-device AFM via MalcomeAPIServer):
+
+On-device Apple Foundation Models cannot sustain Malcome's voice when generating original prose from structured data.
+Tested approaches and results:
+Rules-based character prompt produced generic assistant output with cliches and analyst language.
+Sentence pattern templates produced robotic mad-libs output.
+Full example briefs in the same domain produced near-exact parroting with example name contamination.
+Full example briefs in a different domain lost the voice entirely and reverted to generic mode.
+Draft-then-rewrite produced output where AFM actively degraded the draft by adding hype words and analyst language.
+Minimal-edit instruction produced output where AFM passed the draft through unchanged.
+
+Conclusion: the voice quality lives in deterministic Swift draft composition, not in AFM generation. AFM's role for brief generation is light polish for natural sentence flow. The draft IS the brief.
+
+This is not a failure. It means brief voice is always consistent, always correct, and never burns tokens on unpredictable generation. The 14.8 percent token usage for briefs frees massive budget for the chat layer where AFM generates original responses to unpredictable user questions.
+
 MalcomeBriefGenerator
 conforms to BriefGenerating.
-Uses Apple Foundation Models on-device only, iOS 26 minimum.
-Receives a capped BriefingInput and a static voice prompt, calls AFM, and returns a BriefRecord.
-The prose output is stored as BriefRecord.body untouched.
-If Apple Foundation Models is unavailable, the generator fails honestly with a clear user-facing message. It does not fall back to LocalBriefGenerator silently.
+Uses a two-step pipeline: DraftComposer (deterministic Swift) followed by a light AFM polish pass.
+DraftComposer turns capped BriefingInput into Malcome-voiced prose using sentence templates tuned to signal type, movement classification, watchlist stage, source geography, and corroboration pattern.
+The AFM polish pass uses a minimal prompt (approximately 100 tokens) that instructs the model to lightly smooth sentence flow without adding intensity, analyst language, or hype words.
+If Apple Foundation Models is unavailable, the draft is the output. This is an honest fallback because the draft is already publication-quality Malcome voice.
 LocalBriefGenerator remains in the codebase as a harness and testing reference but is not in the production brief path.
 
 BriefingInput enrichment:
@@ -346,20 +361,24 @@ These caps are named constants, not magic numbers.
 
 BriefComposer applies all caps before passing BriefingInput to the generator.
 
-Signal formatting:
+DraftComposer:
 
-A signal formatting step converts the capped structured data into labeled plain-line text before the AFM call.
-This is not JSON and not markdown. It is compact labeled lines optimized for on-device model readability and token efficiency.
-The formatting step lives in MalcomeBriefGenerator because it is part of prompt assembly, not data assembly.
+DraftComposer is deterministic Swift code inside MalcomeBriefGenerator that turns capped BriefingInput into Malcome-voiced prose.
+It uses sentence templates selected by signal type, movement classification, watchlist stage, source count, and geographic pattern.
+The lead signal gets the strongest opening and a cross-source corroboration statement.
+Secondary signals get attention-framing sentences appropriate to their movement type.
+Watchlist items get graduated language: corroborating items describe what would promote them, early items introduce the name with appropriate uncertainty.
+Source names are woven into prose naturally, not listed mechanically.
+Learned source trust is mentioned in plain language when the BriefingInput includes sourceInfluenceHighlights.
+The draft reads as a finished brief. AFM polish is additive, not essential.
 
 Token budget:
 
 Hard ceiling is 4096 tokens.
-Usable budget is 80 percent of ceiling (3276 tokens).
 Character-based heuristic of approximately 3.5 characters per token is used until Apple provides a token counting API.
-Voice prompt allocates approximately 600 tokens.
-Capped structured data allocates approximately 800 tokens after serialization.
-Response headroom is approximately 1800 tokens.
+Brief generation uses approximately 15 percent of the token budget (approximately 100 tokens for the polish prompt plus approximately 250 tokens for the draft, leaving approximately 250 tokens for AFM response).
+This frees approximately 85 percent of the budget for the chat layer where AFM generates original responses.
+Chat token budget: approximately 400 tokens for the chat voice prompt, approximately 500 tokens for pinned signal context, approximately 300 tokens for summarized conversation history, approximately 400 tokens for recent verbatim turns, with the remainder for user message and response headroom.
 
 Chat layer:
 
@@ -391,7 +410,15 @@ Rows are deleted when a new brief generates.
 
 Voice prompt:
 
-Two static variants share the same Malcome character definition but differ in task instruction.
-The brief variant instructs Malcome to write a cultural radar brief.
-The chat variant instructs Malcome to respond to a follow-up question in character using the provided context.
+Two static variants exist for different AFM roles.
+The brief variant is a minimal polish instruction (approximately 100 tokens) that tells AFM to lightly smooth the draft for natural flow without adding intensity or analyst language. The voice is already in the draft.
+The chat variant is a full character prompt (approximately 400 tokens) that establishes Malcome's voice for original conversational responses. This is where AFM does its real generative work — responding to unpredictable follow-up questions in character with pinned signal context.
 Both variants are collaborative artifacts reviewed before they ship.
+
+Developer iteration infrastructure:
+
+MalcomeAPIServer is a local HTTP API on port 8766 adapted from Hal's LocalAPIServer.
+It exposes endpoints for brief generation, chat, command execution, and state inspection.
+It supports voice prompt overrides for rapid iteration without a build cycle.
+It is compiled only in debug builds and starts automatically.
+The server was used for the 13-iteration voice prompt discovery process and remains available for future prompt tuning.
