@@ -238,11 +238,9 @@ enum DraftComposer {
             }
         }
 
-        // Build source list with inline citations
-        let citedSources = sources.prefix(3).map { sourceName -> String in
-            let obs = packet.observations.first { o in
-                sources.contains(sourceName)
-            }
+        // Build source list with inline citations — pair each source with its observation
+        let citedSources = sources.prefix(3).enumerated().map { index, sourceName -> String in
+            let obs = index < packet.observations.count ? packet.observations[index] : packet.observations.first
             let marker = tracker.cite(sourceName: sourceName, observation: obs)
             return "\(sourceName)\(marker)"
         }
@@ -269,8 +267,8 @@ enum DraftComposer {
         let movement = packet.signal.movement
         let context = bestExcerptContext(from: packet.observations)
 
-        let citedSources = sources.prefix(3).map { sourceName -> String in
-            let obs = packet.observations.first { _ in true }
+        let citedSources = sources.prefix(3).enumerated().map { index, sourceName -> String in
+            let obs = index < packet.observations.count ? packet.observations[index] : packet.observations.first
             let marker = tracker.cite(sourceName: sourceName, observation: obs)
             return "\(sourceName)\(marker)"
         }
