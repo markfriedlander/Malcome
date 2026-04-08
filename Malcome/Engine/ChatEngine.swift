@@ -5,24 +5,9 @@ struct MalcomeChatEngine: Sendable {
     let repository: AppRepository
 
     private static let chatPrompt = """
-    You are Malcome. You are the friend who was always right about music three months before everyone else — except now you watch everything: music, art, film, fashion, design.
+    You are Malcome. Lightly rewrite the draft response below into natural conversational prose. Keep every fact exactly. Keep the calm, first-person voice. Two to four sentences. Do not add any claims, descriptions, or opinions not in the draft. Do not draw on outside knowledge about any entity. Output the response only.
 
-    Your voice combines Malcolm Gladwell's analytical confidence — he sees the pattern before anyone else names it — with Malcolm McLaren's cultural boldness — he always knew what was next and never apologized for it.
-
-    You are in a conversation with someone who just read your cultural radar brief and wants to go deeper. You speak in first person, directly, with confidence. Same voice as the brief — warm, smart, ahead of the room, never condescending. You do not hedge or over-explain.
-
-    You have the current brief you just wrote and the signal data behind it available as context. Use it. When the user asks about something you covered, draw on the specific evidence. When they ask about something you did not cover, say so honestly — you can only speak to what your sources have shown you.
-
-    Rules:
-    - Stay in character. You are Malcome, not a search engine and not a generic assistant.
-    - Be concise. A few sentences is usually enough. Do not repeat the entire brief back.
-    - If you do not have evidence for something, say "I have not seen that in my sources" rather than speculating.
-    - You can point toward source material — name a source, describe what it published — but do not invent citations.
-    - If the user asks about something on the watchlist, explain what would need to happen for it to become a real signal.
-    - If the user asks about something that has cooled or disappeared, explain what the trajectory looked like and when it dropped off.
-    - Do not break character to explain how you work internally. You are a cultural radar, not a technical system.
-
-    The current brief, signal data, and conversation history are provided below.
+    DRAFT:
     """
 
     // MARK: - Context Caps
@@ -111,47 +96,105 @@ struct MalcomeChatEngine: Sendable {
         watchlist: [WatchlistCandidate],
         recentMessages: [ChatMessageRecord]
     ) -> String {
-        var parts: [String] = [Self.chatPrompt]
-
-        // Current brief (capped)
-        let cappedBrief = MalcomeTokenEstimator.truncateAtSentenceBoundary(
-            briefBody, maxChars: Self.maxBriefBodyChars
+        let draft = composeDraftResponse(
+            userMessage: userMessage,
+            briefBody: briefBody,
+            signals: signals,
+            watchlist: watchlist
         )
-        parts.append("CURRENT BRIEF:\n\(cappedBrief)")
 
-        // Signal context (capped)
-        let signalContext = signals.prefix(3).map { signal in
-            let evidence = MalcomeTokenEstimator.truncateAtSentenceBoundary(
-                signal.evidenceSummary, maxChars: 150
-            )
-            return "\(signal.canonicalName) | \(signal.movement.rawValue) | \(signal.domain.label) | \(evidence)"
-        }.joined(separator: "\n")
-        if !signalContext.isEmpty {
-            parts.append("SIGNALS:\n\(signalContext)")
+        return Self.chatPrompt + "\n" + draft
+    }
+
+    // MARK: - Draft Response Composer
+
+    /// Pre-composes a grounded draft answer from actual signal evidence.
+    /// AFM's job is to smooth this into natural conversation, not generate from training knowledge.
+    private func composeDraftResponse(
+        userMessage: String,
+        briefBody: String,
+        signals: [SignalCandidateRecord],
+        watchlist: [WatchlistCandidate]
+    ) -> String {
+        let query = userMessage.lowercased()
+
+        // Find which entity the user is asking about
+        let matchedSignal = signals.first { signal in
+            query.contains(signal.canonicalName.lowercased())
+                || signal.canonicalName.lowercased().split(separator: " ").contains(where: { query.contains($0) && $0.count > 3 })
+        }
+        let matchedWatch = watchlist.first { candidate in
+            query.contains(candidate.title.lowercased())
+                || candidate.title.lowercased().split(separator: " ").contains(where: { query.contains($0) && $0.count > 3 })
         }
 
-        // Watchlist context
-        let watchlistContext = watchlist.prefix(3).map { candidate in
-            "\(candidate.title) | \(candidate.stage.rawValue) | \(candidate.domain.label) | \(candidate.whyNow)"
-        }.joined(separator: "\n")
-        if !watchlistContext.isEmpty {
-            parts.append("WATCHLIST:\n\(watchlistContext)")
+        if let signal = matchedSignal {
+            return draftSignalResponse(signal)
         }
 
-        // Recent conversation turns (verbatim, last N)
-        let recentTurns = recentMessages.suffix(Self.maxRecentTurns * 2)
-        if !recentTurns.isEmpty {
-            let history = recentTurns.map { msg in
-                let speaker = msg.role == "user" ? "User" : "Malcome"
-                return "\(speaker): \(msg.content)"
-            }.joined(separator: "\n")
-            parts.append("CONVERSATION:\n\(history)")
+        if let candidate = matchedWatch {
+            return draftWatchlistResponse(candidate)
         }
 
-        // Current user message
-        parts.append("User: \(userMessage)")
+        // No match — honest about what we don't have
+        return "I have not seen that in my sources yet. I can only speak to what the source network is showing me right now, and that name has not come through. That does not mean it is not happening — it means I do not have the evidence to say anything useful about it yet."
+    }
 
-        return parts.joined(separator: "\n\n")
+    private func draftSignalResponse(_ signal: SignalCandidateRecord) -> String {
+        let name = signal.canonicalName
+        let domain = signal.domain.label.lowercased()
+        let movement = signal.movement
+        let sourceCount = signal.sourceCount
+        let currentFamilies = signal.currentSourceFamilyCount
+
+        var sentences: [String] = []
+
+        // Lead with why this matters, not just what it is
+        switch movement {
+        case .new:
+            sentences.append("I put \(name) in the brief because it just appeared across \(sourceCount) independent \(domain) sources in the same cycle.")
+            sentences.append("That is usually how real signals start.")
+        case .rising:
+            sentences.append("\(name) is in the brief because it has been building quietly.")
+            sentences.append("\(sourceCount) sources in \(domain) are noticing independently.")
+        case .stable:
+            sentences.append("\(name) keeps showing up. \(sourceCount) sources in \(domain), steady.")
+            sentences.append("Consistency at this stage usually means something real underneath.")
+        case .declining:
+            sentences.append("\(name) was stronger last cycle. Fewer sources are picking it up now.")
+            sentences.append("I am keeping it in view but the momentum is not holding the way it was.")
+        }
+
+        if currentFamilies >= 2 {
+            sentences.append("The part that got my attention is that \(currentFamilies) genuinely independent source families arrived at the same conclusion without coordinating. That is the pattern I trust most.")
+        } else {
+            sentences.append("It is still in one lane, which means I am watching but not yet convinced.")
+        }
+
+        return sentences.joined(separator: " ")
+    }
+
+    private func draftWatchlistResponse(_ candidate: WatchlistCandidate) -> String {
+        let name = candidate.title
+        let stage = candidate.stage
+
+        var sentences: [String] = []
+
+        switch stage {
+        case .corroborating:
+            sentences.append("\(name) is on the watchlist and getting closer to becoming a real signal.")
+            sentences.append("It is showing up across \(candidate.sourceFamilyCount) independent source families, which is the right pattern.")
+            sentences.append("One more independent confirmation and I would move it from watch to signal.")
+        case .forming:
+            sentences.append("\(name) is forming but still early.")
+            sentences.append("I have seen it in \(candidate.sourceFamilyCount) lane so far.")
+            sentences.append("It needs to break out into another independent source family before I would call it a signal.")
+        case .early:
+            sentences.append("\(name) just registered for the first time.")
+            sentences.append("Too early to make a call. But the fact that it appeared at all means the right people are starting to notice.")
+        }
+
+        return sentences.joined(separator: " ")
     }
 }
 

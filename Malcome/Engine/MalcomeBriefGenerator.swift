@@ -454,7 +454,7 @@ enum DraftComposer {
 
     // MARK: - Evidence Cleaning
 
-    private static func cleanEvidence(_ text: String) -> String {
+    static func cleanEvidence(_ text: String) -> String {
         var cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
         // Strip all bullet characters (leading and embedded)
         cleaned = cleaned.replacingOccurrences(of: "• ", with: "")
