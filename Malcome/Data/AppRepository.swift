@@ -624,6 +624,87 @@ actor AppRepository {
         }
     }
 
+    // MARK: - Chat Messages
+
+    func storeChatMessage(id: String, briefID: String, role: String, content: String, timestamp: Date, turnNumber: Int) throws {
+        try execute(
+            """
+            INSERT INTO chat_message (id, brief_id, role, content, timestamp, turn_number)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            values: [
+                .text(id),
+                .text(briefID),
+                .text(role),
+                .text(content),
+                .int(Int(timestamp.timeIntervalSince1970)),
+                .int(turnNumber),
+            ]
+        )
+    }
+
+    func fetchChatMessages(briefID: String) throws -> [ChatMessageRecord] {
+        try query(
+            "SELECT id, brief_id, role, content, timestamp, turn_number FROM chat_message WHERE brief_id = ? ORDER BY turn_number ASC",
+            values: [.text(briefID)]
+        ) { statement in
+            ChatMessageRecord(
+                id: text(statement, 0),
+                briefID: text(statement, 1),
+                role: text(statement, 2),
+                content: text(statement, 3),
+                timestamp: Date(timeIntervalSince1970: TimeInterval(sqlite3_column_int64(statement, 4))),
+                turnNumber: Int(sqlite3_column_int(statement, 5))
+            )
+        }
+    }
+
+    func clearChatMessages(excludingBriefID currentBriefID: String) throws {
+        try execute(
+            "DELETE FROM chat_message WHERE brief_id != ?",
+            values: [.text(currentBriefID)]
+        )
+    }
+
+    func chatMessageCount(briefID: String) throws -> Int {
+        try queryCount(
+            "SELECT COUNT(*) FROM chat_message WHERE brief_id = ?",
+            values: [.text(briefID)]
+        )
+    }
+
+    // MARK: - Identity Graph
+
+    func renormalizeObservations() throws -> Int {
+        let observations = try fetchObservations()
+        let sources = try fetchSources()
+        let sourcesByID = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0) })
+
+        var updatedCount = 0
+        for obs in observations {
+            guard let source = sourcesByID[obs.sourceID] else { continue }
+
+            let newNormalized = HTMLSupport.renormalizedEntityName(
+                title: obs.title,
+                authorOrArtist: obs.authorOrArtist,
+                url: obs.url,
+                parserType: source.parserType,
+                sourceName: source.name
+            )
+
+            if newNormalized != obs.normalizedEntityName {
+                try execute(
+                    "UPDATE observation SET normalized_entity_name = ? WHERE id = ?",
+                    values: [.text(newNormalized), .text(obs.id)]
+                )
+                updatedCount += 1
+            }
+        }
+
+        try resetIdentityGraph()
+        return updatedCount
+    }
+
     func resetIdentityGraph() throws {
         // Surgical delete of the identity resolution layer only.
         // Order matters due to foreign key constraints.
@@ -1853,6 +1934,20 @@ actor AppRepository {
                 body TEXT NOT NULL,
                 citations_payload TEXT NOT NULL,
                 period_type TEXT NOT NULL
+            )
+            """,
+            values: []
+        )
+        try execute(
+            database: database,
+            sql: """
+            CREATE TABLE IF NOT EXISTS chat_message (
+                id TEXT PRIMARY KEY,
+                brief_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                turn_number INTEGER NOT NULL
             )
             """,
             values: []

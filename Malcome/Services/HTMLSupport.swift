@@ -553,4 +553,57 @@ enum HTMLSupport {
 
         return nil
     }
+
+    // MARK: - Observation Re-normalization
+
+    /// Recomputes normalizedEntityName from stored observation fields using current parser logic.
+    nonisolated static func renormalizedEntityName(
+        title: String,
+        authorOrArtist: String?,
+        url: String,
+        parserType: ParserType,
+        sourceName: String
+    ) -> String {
+        switch parserType {
+        case .rssFeed:
+            if let author = authorOrArtist, !author.isEmpty,
+               !looksLikeCreditString(author),
+               isMeaningfulEntityName(normalizedAlias(author)) {
+                let clean = cleanText(author)
+                return normalizedEntityName(title: clean, author: clean, fallbackURL: url)
+            } else {
+                let subject = inferredEditorialEntity(from: title, sourceName: sourceName, fallbackURL: url)
+                return normalizedEntityName(title: subject.name, author: subject.author, fallbackURL: url)
+            }
+
+        case .wordPressPosts:
+            let subject = inferredEditorialEntity(from: title, sourceName: sourceName, fallbackURL: url)
+            return normalizedEntityName(title: subject.name, author: subject.author, fallbackURL: url)
+
+        case .bandcampTag:
+            let primary = authorOrArtist ?? title
+            return normalizedEntityName(
+                title: primary.isEmpty ? title : primary,
+                author: authorOrArtist,
+                fallbackURL: url
+            )
+
+        default:
+            return normalizedEntityName(title: title, author: authorOrArtist, fallbackURL: url)
+        }
+    }
+
+    /// Detects Bandcamp-style credit strings like "Earl Sweatshirt, MIKE & SURF GANG, \u{201C}POMPEII // UTILITY\u{201D}"
+    private nonisolated static func looksLikeCreditString(_ text: String) -> Bool {
+        let hasComma = text.contains(", ")
+        let hasQuotes = text.contains("\"") || text.contains("\u{201C}") || text.contains("\u{201D}")
+            || text.contains("\u{2018}") || text.contains("\u{2019}")
+        if hasComma && hasQuotes { return true }
+
+        // Multiple commas with & suggests a multi-artist credit: "A, B & C, Title"
+        let commaCount = text.components(separatedBy: ", ").count - 1
+        if commaCount >= 2 && text.contains("&") { return true }
+
+        return false
+    }
 }

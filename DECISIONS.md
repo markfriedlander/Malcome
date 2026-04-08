@@ -440,6 +440,14 @@ Canonical merge confidence, merge summaries, aliases, and source-role evidence s
 Reason:
 Malcome will not be trustworthy unless a human can audit why a signal resolved to a given identity and where ambiguity remains.
 
+## Re-normalization of stored observation entity names
+
+Decision:
+Malcome should support a RENORMALIZE_OBSERVATIONS command that re-applies current parser normalization logic to all stored observations, then automatically resets the identity graph. This is a two-step atomic operation: update normalizedEntityName on every observation where the recomputed value differs, then clear and rebuild the identity resolution layer.
+
+Reason:
+When parser improvements change how entity names are extracted, existing stored observations keep their old normalizedEntityName from the original parse. Waiting for organic data replacement is too slow for a dev workflow. Re-normalization lets parser fixes take effect immediately on the entire observation history, producing cleaner canonical entities on the next identity resolution pass. The credit-string detection heuristic identifies Bandcamp-style multi-artist credit strings and falls back to editorial entity inference rather than treating the full credit string as a single entity.
+
 ## Bandcamp Daily RSS: separate artist credit from release title
 
 Decision:

@@ -601,6 +601,15 @@ struct WatchlistCandidate: Identifiable, Hashable, Sendable {
     let score: Double
 }
 
+struct ChatMessageRecord: Identifiable, Hashable, Sendable {
+    let id: String
+    let briefID: String
+    let role: String
+    let content: String
+    let timestamp: Date
+    let turnNumber: Int
+}
+
 struct SourceStatusRecord: Identifiable, Hashable, Sendable {
     let id: String
     let source: SourceRecord

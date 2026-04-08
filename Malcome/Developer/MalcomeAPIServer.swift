@@ -431,7 +431,76 @@ class MalcomeAPIServer {
     // MARK: - POST /chat
 
     private func handleChat(body: Data?) async -> (Int, String) {
-        return (501, #"{"error":"Chat layer not yet built"}"#)
+        guard let body,
+              let json = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+              let message = json["message"] as? String, !message.isEmpty else {
+            return (400, #"{"error":"Missing 'message'"}"#)
+        }
+        guard let model = appModel else {
+            return (503, #"{"error":"AppViewModel unavailable"}"#)
+        }
+        guard MalcomeAPIServer.checkAFMAvailable() else {
+            return (503, #"{"error":"Apple Foundation Models unavailable on this device"}"#)
+        }
+
+        let state = await MainActor.run {
+            (
+                brief: model.brief,
+                signals: model.signals,
+                watchlist: model.watchlist
+            )
+        }
+
+        guard let brief = state.brief else {
+            return (400, #"{"error":"No brief generated yet. Run NEW_BRIEF_CYCLE first."}"#)
+        }
+
+        let chatEngine = MalcomeChatEngine(repository: model.container.repository)
+
+        // Assemble prompt for diagnostics
+        let existingMessages = (try? await model.container.repository.fetchChatMessages(briefID: brief.id)) ?? []
+        let fullPrompt = chatEngine.assemblePrompt(
+            userMessage: message,
+            briefBody: brief.body,
+            signals: Array(state.signals),
+            watchlist: Array(state.watchlist),
+            recentMessages: existingMessages
+        )
+
+        let startTime = Date()
+        do {
+            let response = try await chatEngine.sendMessage(
+                message,
+                briefID: brief.id,
+                briefBody: brief.body,
+                signals: Array(state.signals),
+                watchlist: Array(state.watchlist)
+            )
+            let elapsed = Date().timeIntervalSince(startTime)
+
+            let promptTokens = MalcomeTokenEstimator.estimateTokens(from: fullPrompt)
+            let responseTokens = MalcomeTokenEstimator.estimateTokens(from: response.content)
+            let totalTokens = promptTokens + responseTokens
+            let percentUsed = Double(totalTokens) / 4096.0 * 100.0
+
+            let output = """
+            {
+              "response": \(jsonEscape(response.content)),
+              "fullPromptUsed": \(jsonEscape(fullPrompt)),
+              "turnNumber": \(response.turnNumber),
+              "tokenEstimate": {
+                "promptTokens": \(promptTokens),
+                "responseTokens": \(responseTokens),
+                "totalTokens": \(totalTokens),
+                "percentUsed": \(String(format: "%.1f", percentUsed))
+              },
+              "inferenceSeconds": \(String(format: "%.2f", elapsed))
+            }
+            """
+            return (200, output)
+        } catch {
+            return (500, "{\"error\":\(jsonEscape(error.localizedDescription))}")
+        }
     }
 
     // MARK: - POST /command
@@ -474,6 +543,17 @@ class MalcomeAPIServer {
         } else if trimmed == "SET_POLITENESS_MODE:production" || trimmed == "CLEAR_POLITENESS_MODE" {
             SourcePipeline.devCadenceFloorSeconds = nil
             return (200, #"{"status":"ok","command":"SET_POLITENESS_MODE","mode":"production"}"#)
+
+        } else if trimmed == "RENORMALIZE_OBSERVATIONS" {
+            guard let model = appModel else {
+                return (503, #"{"error":"AppViewModel unavailable"}"#)
+            }
+            do {
+                let count = try await model.container.repository.renormalizeObservations()
+                return (200, "{\"status\":\"ok\",\"command\":\"RENORMALIZE_OBSERVATIONS\",\"observationsUpdated\":\(count)}")
+            } catch {
+                return (500, "{\"error\":\(jsonEscape(error.localizedDescription))}")
+            }
 
         } else if trimmed == "RESET_IDENTITY_GRAPH" {
             guard let model = appModel else {
