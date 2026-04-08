@@ -692,10 +692,22 @@ actor AppRepository {
                 sourceName: source.name
             )
 
-            if newNormalized != obs.normalizedEntityName {
+            // Also fix authorOrArtist if it looks like a credit string
+            let newAuthor: String?
+            if let author = obs.authorOrArtist, HTMLSupport.isLikelyCreditString(author) {
+                let lead = HTMLSupport.extractLeadArtist(from: author)
+                newAuthor = lead.isEmpty ? obs.authorOrArtist : lead
+            } else {
+                newAuthor = obs.authorOrArtist
+            }
+
+            let nameChanged = newNormalized != obs.normalizedEntityName
+            let authorChanged = newAuthor != obs.authorOrArtist
+
+            if nameChanged || authorChanged {
                 try execute(
-                    "UPDATE observation SET normalized_entity_name = ? WHERE id = ?",
-                    values: [.text(newNormalized), .text(obs.id)]
+                    "UPDATE observation SET normalized_entity_name = ?, author_or_artist = ? WHERE id = ?",
+                    values: [.text(newNormalized), .nullOrText(newAuthor), .text(obs.id)]
                 )
                 updatedCount += 1
             }

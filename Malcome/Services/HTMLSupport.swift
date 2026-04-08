@@ -566,15 +566,27 @@ enum HTMLSupport {
     ) -> String {
         switch parserType {
         case .rssFeed:
-            if let author = authorOrArtist, !author.isEmpty,
-               !looksLikeCreditString(author),
-               isMeaningfulEntityName(normalizedAlias(author)) {
-                let clean = cleanText(author)
-                return normalizedEntityName(title: clean, author: clean, fallbackURL: url)
-            } else {
-                let subject = inferredEditorialEntity(from: title, sourceName: sourceName, fallbackURL: url)
-                return normalizedEntityName(title: subject.name, author: subject.author, fallbackURL: url)
+            if let author = authorOrArtist, !author.isEmpty {
+                if looksLikeCreditString(author) {
+                    let leadArtist = extractLeadArtist(from: author)
+                    if !leadArtist.isEmpty, isMeaningfulEntityName(normalizedAlias(leadArtist)) {
+                        return normalizedEntityName(title: leadArtist, author: leadArtist, fallbackURL: url)
+                    }
+                } else if isMeaningfulEntityName(normalizedAlias(author)) {
+                    let clean = cleanText(author)
+                    return normalizedEntityName(title: clean, author: clean, fallbackURL: url)
+                }
             }
+            // Fallback: try credit-string extraction from the title itself
+            if looksLikeCreditString(title) {
+                let leadArtist = extractLeadArtist(from: title)
+                if !leadArtist.isEmpty, isMeaningfulEntityName(normalizedAlias(leadArtist)) {
+                    return normalizedEntityName(title: leadArtist, author: leadArtist, fallbackURL: url)
+                }
+            }
+            // Last resort: editorial entity inference from title
+            let subject = inferredEditorialEntity(from: title, sourceName: sourceName, fallbackURL: url)
+            return normalizedEntityName(title: subject.name, author: subject.author, fallbackURL: url)
 
         case .wordPressPosts:
             let subject = inferredEditorialEntity(from: title, sourceName: sourceName, fallbackURL: url)
@@ -593,7 +605,20 @@ enum HTMLSupport {
         }
     }
 
-    /// Detects Bandcamp-style credit strings like "Earl Sweatshirt, MIKE & SURF GANG, \u{201C}POMPEII // UTILITY\u{201D}"
+    /// Extracts the lead artist from a credit string like "Earl Sweatshirt, MIKE & SURF GANG, 'POMPEII // UTILITY'"
+    /// Returns the first segment before the first comma, cleaned.
+    nonisolated static func extractLeadArtist(from text: String) -> String {
+        let segments = text.components(separatedBy: ", ")
+        guard let first = segments.first else { return "" }
+        return cleanText(first)
+    }
+
+    /// Detects Bandcamp-style credit strings. Public for use in renormalization.
+    nonisolated static func isLikelyCreditString(_ text: String) -> Bool {
+        looksLikeCreditString(text)
+    }
+
+    /// Internal credit string detection.
     private nonisolated static func looksLikeCreditString(_ text: String) -> Bool {
         let hasComma = text.contains(", ")
         let hasQuotes = text.contains("\"") || text.contains("\u{201C}") || text.contains("\u{201D}")
@@ -603,6 +628,10 @@ enum HTMLSupport {
         // Multiple commas with & suggests a multi-artist credit: "A, B & C, Title"
         let commaCount = text.components(separatedBy: ", ").count - 1
         if commaCount >= 2 && text.contains("&") { return true }
+
+        // "Artist, Artist – Title" or "Artist, Artist — Title" (en-dash/em-dash title separator)
+        let hasDashSeparator = text.contains(" – ") || text.contains(" — ") || text.contains(" - ")
+        if hasComma && hasDashSeparator { return true }
 
         return false
     }
