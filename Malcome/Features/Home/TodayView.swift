@@ -84,8 +84,10 @@ struct TodayView: View {
                 .font(.subheadline.italic())
                 .foregroundStyle(MalcomePalette.secondary)
                 .multilineTextAlignment(.center)
-                .animation(.easeInOut(duration: 0.5), value: appModel.loadingMessages.currentMessage)
                 .frame(maxWidth: .infinity)
+                .id(appModel.loadingMessages.currentMessage)
+                .transition(.opacity.animation(.easeInOut(duration: 0.5)))
+                .animation(.easeInOut(duration: 0.5), value: appModel.loadingMessages.currentMessage)
             Spacer().frame(height: 80)
         }
     }

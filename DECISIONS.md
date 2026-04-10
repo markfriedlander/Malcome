@@ -440,6 +440,24 @@ Canonical merge confidence, merge summaries, aliases, and source-role evidence s
 Reason:
 Malcome will not be trustworthy unless a human can audit why a signal resolved to a given identity and where ambiguity remains.
 
+## Multi-entity extraction from roundup articles
+
+Decision:
+When an article is tagged as a roundup (songs of the week, festival coverage, best-of lists), Malcome should extract each mentioned cultural entity as a separate observation rather than treating the entire article as a single entity. Use AFM at parse time to extract the list of names, entity types, and brief per-entity context from the article title and excerpt.
+
+Reason:
+A BrooklynVegan Coachella roundup mentioning Turnstile, The xx, Sabrina Carpenter, Lykke Li, Ethel Cain, and DEVO currently produces zero usable entities. Each of those artists is a legitimate observation that could corroborate with mentions from other sources. Multi-entity extraction is the single highest-impact change for signal density without adding sources or lowering thresholds. Each extracted entity becomes a separate ObservationDraft with the article URL, source, and a per-entity excerpt.
+
+## Cold start seed database
+
+Decision:
+Malcome should ship a pre-populated seed database so new users get real signal history on day one, followed by an aggressive first-launch backfill to bring the data current.
+
+Reason:
+A fresh install with an empty database is nearly useless for weeks. The corroboration threshold requires historical depth that takes time to accumulate organically. The seed database provides months of pre-processed observations and entity history. The first-launch backfill covers the gap between the seed database snapshot and the current moment. Together they ensure every user gets a useful Malcome from first launch.
+
+Implications: app bundle size increases with the seed database, seed must be periodically refreshed with app updates, and seed data must be scrubbed of any development-only artifacts before shipping.
+
 ## Editorial source entity extraction: headline over author
 
 Decision:

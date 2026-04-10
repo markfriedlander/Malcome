@@ -123,9 +123,15 @@ final class LoadingMessageProvider: ObservableObject {
         self.activeDomains = activeDomains
         usedMessages.removeAll()
         currentMessage = nextMessage()
-        timer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: true) { [weak self] _ in
+        // Fade in 0.5s → hold 3s → fade out 0.5s → dark 0.3s → next
+        timer = Timer.scheduledTimer(withTimeInterval: 4.3, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.currentMessage = self?.nextMessage() ?? ""
+                guard let self else { return }
+                // Fade out by clearing
+                self.currentMessage = ""
+                // Brief dark moment, then fade in next
+                try? await Task.sleep(for: .milliseconds(300))
+                self.currentMessage = self.nextMessage()
             }
         }
     }

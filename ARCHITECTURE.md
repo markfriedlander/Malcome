@@ -186,6 +186,15 @@ scraped at
 published at when available
 historical tags when the observation entered via archive backfill
 
+Multi-entity extraction from roundup articles:
+
+When an observation is tagged as a roundup, the pipeline uses AFM at parse time to extract multiple cultural entities from the article title and excerpt.
+Each extracted entity becomes a separate ObservationDraft with the original article URL, source, and a per-entity excerpt.
+The AFM call receives the article title and excerpt and returns a structured list of entity names, entity types, and brief context per entity.
+Each resulting ObservationDraft goes through the normal persist, deduplicate, and score flow.
+This dramatically increases signal density from editorial roundup articles that mention multiple artists, events, or cultural objects.
+The extraction runs as a blocking AFM call during the parse phase, same pattern as ExcerptDistiller.
+
 Observation excerpt distillation:
 
 Observations may carry a distilledExcerpt field alongside the raw excerpt.

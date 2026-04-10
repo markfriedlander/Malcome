@@ -199,12 +199,12 @@ struct SourcePipeline: Sendable {
     ) async throws -> [ObservationDraft] {
         switch source.id {
         case "aquarium-drunkard":
-            guard existingCount < 48 else { return [] }
+            guard existingCount < 150 else { return [] }
             return try await fetchArchivePages(
                 source: source,
                 parser: parser,
                 fetchedAt: fetchedAt,
-                archivePages: (2...5).map { pageNumber in
+                archivePages: (2...12).map { pageNumber in
                     HistoricalArchivePage(
                         pageNumber: pageNumber,
                         payload: .html(url: "https://aquariumdrunkard.com/wp-json/wp/v2/posts?per_page=12&page=\(pageNumber)")
@@ -212,12 +212,12 @@ struct SourcePipeline: Sendable {
                 }
             )
         case "hyperallergic":
-            guard existingCount < 48 else { return [] }
+            guard existingCount < 150 else { return [] }
             return try await fetchArchivePages(
                 source: source,
                 parser: parser,
                 fetchedAt: fetchedAt,
-                archivePages: (2...5).map { pageNumber in
+                archivePages: (2...12).map { pageNumber in
                     HistoricalArchivePage(
                         pageNumber: pageNumber,
                         payload: .html(url: hyperallergicContentAPIURL(page: pageNumber))
@@ -225,7 +225,7 @@ struct SourcePipeline: Sendable {
                 }
             )
         case "bandcamp-la-discover":
-            guard existingCount < 48 else { return [] }
+            guard existingCount < 150 else { return [] }
             return try await fetchBandcampHistoricalDrafts(
                 source: source,
                 parser: parser,
@@ -233,15 +233,15 @@ struct SourcePipeline: Sendable {
                 initialRequestBody: """
                 {"category_id":0,"tag_norm_names":[],"geoname_id":5368361,"slice":"top","cursor":null,"size":24,"include_result_types":["a","s"]}
                 """,
-                pageRange: 2...4
+                pageRange: 2...6
             )
         case _ where source.parserType == .wordPressPosts:
-            guard existingCount < 48 else { return [] }
+            guard existingCount < 150 else { return [] }
             return try await fetchArchivePages(
                 source: source,
                 parser: parser,
                 fetchedAt: fetchedAt,
-                archivePages: (2...5).map { pageNumber in
+                archivePages: (2...10).map { pageNumber in
                     HistoricalArchivePage(
                         pageNumber: pageNumber,
                         payload: .html(url: wordPressPostsAPIURL(baseURL: source.baseURL, page: pageNumber))
