@@ -2212,7 +2212,18 @@ actor AppRepository {
         )
         let directory = baseURL.appendingPathComponent("Malcome", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory.appendingPathComponent("malcome.sqlite")
+        let dbURL = directory.appendingPathComponent("malcome.sqlite")
+
+        // First launch: copy seed database from bundle if no database exists yet
+        if !FileManager.default.fileExists(atPath: dbURL.path) {
+            if let seedURL = Bundle.main.url(forResource: "malcome_seed", withExtension: "sqlite") {
+                try FileManager.default.copyItem(at: seedURL, to: dbURL)
+                UserDefaults.standard.set(true, forKey: "malcome_seeded_from_bundle")
+                print("Malcome: Seed database copied from bundle")
+            }
+        }
+
+        return dbURL
     }
 }
 

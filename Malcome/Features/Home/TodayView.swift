@@ -27,7 +27,9 @@ struct TodayView: View {
                             ErrorBanner(message: errorMessage)
                         }
 
-                        if appModel.isRefreshing {
+                        if appModel.isFirstLaunch {
+                            firstLaunchState
+                        } else if appModel.isRefreshing {
                             loadingState
                         } else {
                             threadContent
@@ -73,6 +75,28 @@ struct TodayView: View {
         .onChange(of: appModel.brief?.id) {
             Task { await loadThread() }
         }
+    }
+
+    // MARK: - First Launch State
+
+    private var firstLaunchState: some View {
+        VStack(spacing: 16) {
+            Spacer().frame(height: 60)
+            Text("First time here. Give me a moment to get current.")
+                .font(.subheadline)
+                .foregroundStyle(MalcomePalette.primary)
+                .multilineTextAlignment(.center)
+            if !appModel.loadingMessages.currentMessage.isEmpty {
+                Text(appModel.loadingMessages.currentMessage)
+                    .font(.caption.italic())
+                    .foregroundStyle(MalcomePalette.secondary)
+                    .multilineTextAlignment(.center)
+                    .id(appModel.loadingMessages.currentMessage)
+                    .transition(.opacity.animation(.easeInOut(duration: 0.5)))
+            }
+            Spacer().frame(height: 60)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Loading State

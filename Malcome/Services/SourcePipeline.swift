@@ -65,10 +65,12 @@ struct SourcePipeline: Sendable {
                 if source.parserType == .stub {
                     throw SourcePipelineError.parserTODO(sourceName: source.name)
                 }
-                let observations = try await fetchObservationDrafts(for: source)
+                var observations = try await fetchObservationDrafts(for: source)
                 guard !observations.isEmpty else {
                     throw SourcePipelineError.emptyParse(sourceName: source.name)
                 }
+                // Expand roundup articles into per-entity observations
+                observations = await expandRoundupDrafts(observations, source: source)
                 let insertedCount = try await repository.storeObservations(snapshotID: snapshot.id, sourceID: source.id, drafts: observations)
                 let completed = try await repository.completeSnapshot(
                     snapshotID: snapshot.id,
@@ -121,6 +123,62 @@ struct SourcePipeline: Sendable {
         }
 
         return nil
+    }
+
+    /// Expands roundup-tagged drafts into per-entity observations using AFM extraction.
+    /// Non-roundup drafts pass through unchanged. If extraction fails, the original draft is kept.
+    private func expandRoundupDrafts(_ drafts: [ObservationDraft], source: SourceRecord) async -> [ObservationDraft] {
+        var expanded: [ObservationDraft] = []
+
+        for draft in drafts {
+            if draft.tags.contains("roundup") {
+                let entities = await RoundupExtractor.extractEntities(
+                    title: draft.title,
+                    excerpt: draft.excerpt ?? ""
+                )
+
+                if entities.isEmpty {
+                    // No entities extracted — keep the original roundup observation
+                    expanded.append(draft)
+                } else {
+                    // Store original as a roundup_source concept
+                    let roundupSourceDraft = ObservationDraft(
+                        domain: draft.domain,
+                        entityType: .concept,
+                        externalIDOrHash: draft.externalIDOrHash,
+                        title: draft.title,
+                        subtitle: draft.subtitle,
+                        url: draft.url,
+                        authorOrArtist: nil,
+                        tags: draft.tags + ["roundup_source"],
+                        location: draft.location,
+                        publishedAt: draft.publishedAt,
+                        scrapedAt: draft.scrapedAt,
+                        excerpt: draft.excerpt,
+                        normalizedEntityName: draft.normalizedEntityName,
+                        rawPayload: draft.rawPayload
+                    )
+                    expanded.append(roundupSourceDraft)
+
+                    // Add per-entity drafts
+                    let entityDrafts = RoundupExtractor.draftsFromExtraction(
+                        entities: entities,
+                        originalTitle: draft.title,
+                        originalURL: draft.url,
+                        originalExcerpt: draft.excerpt ?? "",
+                        source: source,
+                        fetchedAt: draft.scrapedAt,
+                        publishedAt: draft.publishedAt,
+                        tags: draft.tags
+                    )
+                    expanded.append(contentsOf: entityDrafts)
+                }
+            } else {
+                expanded.append(draft)
+            }
+        }
+
+        return expanded
     }
 
     private func backoffUntil(for error: Error, source: SourceRecord, now: Date) -> Date? {

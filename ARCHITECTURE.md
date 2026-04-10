@@ -189,11 +189,16 @@ historical tags when the observation entered via archive backfill
 Multi-entity extraction from roundup articles:
 
 When an observation is tagged as a roundup, the pipeline uses AFM at parse time to extract multiple cultural entities from the article title and excerpt.
-Each extracted entity becomes a separate ObservationDraft with the original article URL, source, and a per-entity excerpt.
-The AFM call receives the article title and excerpt and returns a structured list of entity names, entity types, and brief context per entity.
+RoundupExtractor is a separate file following the ExcerptDistiller pattern: fresh LanguageModelSession per call, discarded immediately after.
+The AFM prompt sends the article title and excerpt and requests a JSON array of entity objects with name, type, and one-sentence context.
+Each extracted entity becomes a separate ObservationDraft with the original article URL, source, timestamp, and a per-entity excerpt from the extraction.
+Extracted entities are tagged with extractedFromRoundup so the signal engine can track provenance and eventually apply different corroboration weights.
+The original roundup article is also stored with entity type concept and a roundup_source tag so it does not compete with extracted entities.
 Each resulting ObservationDraft goes through the normal persist, deduplicate, and score flow.
-This dramatically increases signal density from editorial roundup articles that mention multiple artists, events, or cultural objects.
-The extraction runs as a blocking AFM call during the parse phase, same pattern as ExcerptDistiller.
+Extraction is capped at 8 entities per roundup to prevent noise.
+If AFM returns malformed JSON or an empty array, the pipeline falls back to single-entity observation silently. No failure, no crash.
+If AFM is unavailable, the roundup is stored as a single observation with its headline-inferred entity name.
+This is the highest-impact change for signal density without adding sources or lowering thresholds.
 
 Observation excerpt distillation:
 

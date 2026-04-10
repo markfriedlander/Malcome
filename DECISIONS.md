@@ -451,12 +451,21 @@ A BrooklynVegan Coachella roundup mentioning Turnstile, The xx, Sabrina Carpente
 ## Cold start seed database
 
 Decision:
-Malcome should ship a pre-populated seed database so new users get real signal history on day one, followed by an aggressive first-launch backfill to bring the data current.
+Malcome ships a pre-populated seed database (malcome_seed.sqlite) bundled as an app resource. On first launch, if no database exists, the seed is copied to the documents directory. A first-launch backfill then brings the data current.
+
+Seed policy:
+Deep start date is the earliest observation in the seed (currently 1997, from historical backfill).
+Seed cutoff date is stored as metadata. First-launch backfill covers from the cutoff to the current moment.
+Rebuild cadence is quarterly — regenerate the seed from the development database, scrub, and ship with the next app update.
+Privacy: observations about public cultural entities from public sources only. No user data, no personal information, no chat history, no briefs.
+
+Scrubbed tables (always empty in the seed): chat_messages, briefs.
+Preserved tables: observations, sources, canonical entities, entity history, signal runs, pathway stats, source influence stats, snapshots.
+
+Current seed size: 21MB with 2647 observations across 31 sources. Under the 50MB threshold for direct bundling without Git LFS.
 
 Reason:
 A fresh install with an empty database is nearly useless for weeks. The corroboration threshold requires historical depth that takes time to accumulate organically. The seed database provides months of pre-processed observations and entity history. The first-launch backfill covers the gap between the seed database snapshot and the current moment. Together they ensure every user gets a useful Malcome from first launch.
-
-Implications: app bundle size increases with the seed database, seed must be periodically refreshed with app updates, and seed data must be scrubbed of any development-only artifacts before shipping.
 
 ## Editorial source entity extraction: headline over author
 

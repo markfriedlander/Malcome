@@ -15,6 +15,7 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var refreshSummary: String?
     @Published private(set) var refreshWarning: String?
     @Published var errorMessage: String?
+    @Published private(set) var isFirstLaunch = false
 
     let container: AppContainer
     let loadingMessages = LoadingMessageProvider()
@@ -25,11 +26,22 @@ final class AppViewModel: ObservableObject {
 
     func bootstrapIfNeeded() async {
         do {
+            // Detect first launch from seed
+            if UserDefaults.standard.bool(forKey: "malcome_seeded_from_bundle"),
+               !UserDefaults.standard.bool(forKey: "malcome_first_launch_complete") {
+                isFirstLaunch = true
+            }
+
             try await container.repository.seedSourcesIfNeeded(container.sourceRegistry.initialSeeds())
             try await reload()
 
             if brief == nil {
                 await refreshAll()
+            }
+
+            if isFirstLaunch {
+                UserDefaults.standard.set(true, forKey: "malcome_first_launch_complete")
+                isFirstLaunch = false
             }
         } catch {
             errorMessage = error.localizedDescription
