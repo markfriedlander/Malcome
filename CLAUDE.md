@@ -186,21 +186,21 @@ When in doubt: ask. A short clarifying question is always better than building t
 
 **Voice layer — working.** `MalcomeBriefGenerator` uses a DraftComposer architecture: deterministic Swift templates write Malcome-voiced prose from structured signal data, with Apple Foundation Models providing a light polish pass. This was discovered through 13 iterations against on-device AFM — the model cannot sustain original character voice from scratch but excels at smoothing pre-composed drafts. The voice is domain-agnostic (interpolates from signal data) and handles lead signals, secondary signals, watchlist items, thin-data states, and empty states.
 
-**Chat layer — scaffolded.** `ChatEngine` pre-composes grounded draft responses from actual signal evidence. AFM smooths drafts into conversational prose. Zero hallucination — responses only reference data present in the signal context. Wikipedia context is fetched on-the-fly for "who is X" questions. Chat thread lifecycle is tied to brief cycles. Thinking state shows short calm messages while AFM responds.
+**Chat layer — scaffolded.** `ChatEngine` pre-composes grounded draft responses from actual signal evidence. AFM smooths drafts into conversational prose. Zero hallucination — responses only reference data present in the signal context. Wikipedia context is fetched on-the-fly for "who is X" questions with three-tier injection: ~15 word phrase for briefs, ~50 word summary for general background, full extract for comprehensive detail. Pronoun resolution connects follow-up questions to the last-mentioned entity. Chat thread lifecycle is tied to brief cycles. Thinking state shows short calm messages while AFM responds.
 
 **UI — restructured.** Three tabs: Today (brief as first message + chat), Radar (signal/watchlist cards), Settings (source management, doctrine profiles, How Malcome Works). Identity audit is developer-only. Inline citation markers with tappable preview cards and stream deep links (Apple Music, Bandcamp, YouTube).
 
-**Developer infrastructure — working.** `MalcomeAPIServer` on port 8766 exposes endpoints for brief generation, chat, pipeline inspection, command execution, and state queries. Dev politeness mode compresses refresh cadence. Identity graph reset and observation renormalization commands available. `ExcerptDistiller` runs AFM at ingest time for entity-specific context extraction.
+**Developer infrastructure — working.** `MalcomeAPIServer` on port 8766 exposes endpoints for brief generation, chat, pipeline inspection, command execution, and state queries. Dev politeness mode compresses refresh cadence. Identity graph reset and observation renormalization commands available. `ExcerptDistiller` runs AFM at ingest time for entity-specific context extraction. `RoundupExtractor` uses AFM to extract individual entities from roundup articles.
 
 **Key architectural finding:** On-device AFM (4096-token context) cannot sustain Malcome's voice when generating original prose from structured data. The voice lives in deterministic Swift draft composition. AFM's generative role is in the chat layer — responding to unpredictable user questions with grounded evidence. Brief generation uses ~15% of the token budget, freeing ~85% for chat.
 
 **What is not yet built:**
 - Full chat conversation history with Hal-pattern summarize-then-verify for older turns
 - Entity search across previous chat threads (Hal memory pattern adaptation)
-- TextSummarizer adapted from Hal for conversation compression
 - Full article body ingestion at parse time
 - Calendar event integration via EventKit
 - Domain preference toggles in Settings
+- Domain-specific context fallbacks (MusicBrainz, Artsy, TMDB)
 
 ---
 

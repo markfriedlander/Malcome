@@ -317,3 +317,20 @@ Signal detail was rewritten in plain language — "two genuinely different parts
 Chat thinking state shows short calm messages ("Give me a second.", "Let me think about that.") while AFM responds.
 The Bandcamp Daily and Quietus RSS parser was fixed to extract lead artist names from multi-artist credit strings, with a RENORMALIZE_OBSERVATIONS command to re-apply parser fixes to stored data.
 Calendar event integration via EventKit was flagged as a planned feature.
+
+## Phase 47
+
+Signal density was addressed through multi-entity roundup extraction and deeper historical backfills.
+RoundupExtractor uses AFM at parse time to extract individual cultural entities from roundup articles, turning a single "Best of 2025" article into 6-8 separate entity observations tagged with extractedFromRoundup for provenance tracking.
+162 entities were extracted from 26 existing roundup articles after fixing JSON fence stripping and URL deduplication collisions.
+Historical backfill depth was expanded from pages 2-5 to pages 2-12 for priority sources, adding 457 new observations across Hyperallergic, ARTnews, Aquarium Drunkard, KXLU, CARLA, Film Comment, and The Quietus.
+Staff byline filtering was added to reject publication staff credits and editorial journalist names as canonical entities, with the editorial source entity priority rule ensuring headline subjects are preferred over author fields for editorial-classified sources.
+A seed database was extracted, scrubbed of personal data, and bundled as an app resource for first-launch cold start.
+The brief now requires 2+ independent source families for signal promotion, preventing same-family-only corroboration from leading the product.
+Brief title generation moved from a hardcoded "and the Cultural Current" suffix to AFM-generated titles with movement-aware template fallbacks.
+WikipediaClient was adapted from Microdoc's tested resolver with four-strategy title resolution, HTTP status checking, in-memory actor cache, and a never-throws entry point.
+WikipediaSummarizer provides two-stage compress-then-verify for Wikipedia extracts, adapted from Hal's TextSummarizer pattern with NLEmbedding verification.
+Three-tier Wikipedia context injection was built: brief gets a ~15 word descriptor phrase, general chat background gets a ~50 word summary, comprehensive detail questions get the full extract.
+Pronoun resolution in chat connects follow-up questions like "his discography" to the last-mentioned entity from conversation history.
+Multi-entity extraction and cold start seed database were documented as architectural decisions.
+Domain-specific context fallbacks (MusicBrainz, Artsy, TMDB) were documented as planned capabilities.

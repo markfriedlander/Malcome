@@ -34,11 +34,11 @@ enum WikipediaSummarizer {
 
     private static func afmCompress(_ text: String, targetWords: Int) async -> String {
         let prompt = """
-        Compress this Wikipedia text to approximately \(targetWords) words. Keep all names, dates, and factual claims. Write clear sentences. Do not add interpretation.
+        Compress this Wikipedia text to approximately \(targetWords) words. Maximum two sentences. Keep key names and dates. Do not add interpretation.
 
         Text: \(String(text.prefix(2000)))
 
-        Compressed (\(targetWords) words):
+        Compressed (\(targetWords) words, two sentences max):
         """
 
         do {

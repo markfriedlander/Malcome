@@ -54,21 +54,23 @@ struct MalcomeChatEngine: Sendable {
 
         // Fetch Wikipedia context with tier selection based on question type
         var wikipediaContext: String?
+        var resolvedEntityName: String?
         let needsWiki = isBackgroundQuestion(userMessage) || isComprehensiveDetailQuestion(userMessage)
         if needsWiki {
             var entityName = extractEntityFromQuestion(userMessage, signals: signals, watchlist: watchlist)
 
-            // Pronoun resolution: if no entity found, use the last-mentioned entity from recent chat
             if entityName == nil {
                 entityName = lastMentionedEntity(in: existingMessages, signals: signals, watchlist: watchlist)
             }
+
+            resolvedEntityName = entityName
 
             if let name = entityName {
                 if isComprehensiveDetailQuestion(userMessage) {
                     wikipediaContext = await WikipediaClient.fullExtract(for: name)
                 } else {
                     if let summary = await WikipediaClient.contextSummary(for: name) {
-                        let compressed = await WikipediaSummarizer.summarize(summary.extract, targetWords: 75)
+                        let compressed = await WikipediaSummarizer.summarize(summary.extract, targetWords: 50)
                         wikipediaContext = compressed
                     }
                 }
@@ -82,7 +84,8 @@ struct MalcomeChatEngine: Sendable {
             signals: signals,
             watchlist: watchlist,
             recentMessages: existingMessages,
-            wikipediaContext: wikipediaContext
+            wikipediaContext: wikipediaContext,
+            resolvedEntityName: resolvedEntityName
         )
 
         // Call AFM
@@ -119,14 +122,16 @@ struct MalcomeChatEngine: Sendable {
         signals: [SignalCandidateRecord],
         watchlist: [WatchlistCandidate],
         recentMessages: [ChatMessageRecord],
-        wikipediaContext: String? = nil
+        wikipediaContext: String? = nil,
+        resolvedEntityName: String? = nil
     ) -> String {
         let draft = composeDraftResponse(
             userMessage: userMessage,
             briefBody: briefBody,
             signals: signals,
             watchlist: watchlist,
-            wikipediaContext: wikipediaContext
+            wikipediaContext: wikipediaContext,
+            resolvedEntityName: resolvedEntityName
         )
 
         return Self.chatPrompt + "\n" + draft
@@ -139,17 +144,23 @@ struct MalcomeChatEngine: Sendable {
         briefBody: String,
         signals: [SignalCandidateRecord],
         watchlist: [WatchlistCandidate],
-        wikipediaContext: String? = nil
+        wikipediaContext: String? = nil,
+        resolvedEntityName: String? = nil
     ) -> String {
         let query = userMessage.lowercased()
+        let resolvedLower = resolvedEntityName?.lowercased()
 
-        // Find which entity the user is asking about
+        // Find which entity the user is asking about — check both the message and the resolved entity
         let matchedSignal = signals.first { signal in
-            query.contains(signal.canonicalName.lowercased())
+            let name = signal.canonicalName.lowercased()
+            return query.contains(name)
+                || resolvedLower == name
                 || signal.canonicalName.lowercased().split(separator: " ").contains(where: { query.contains($0) && $0.count > 3 })
         }
         let matchedWatch = watchlist.first { candidate in
-            query.contains(candidate.title.lowercased())
+            let name = candidate.title.lowercased()
+            return query.contains(name)
+                || resolvedLower == name
                 || candidate.title.lowercased().split(separator: " ").contains(where: { query.contains($0) && $0.count > 3 })
         }
 
