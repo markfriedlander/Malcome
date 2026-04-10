@@ -303,3 +303,17 @@ MalcomeAPIServer exposes endpoints for brief generation, chat, pipeline inspecti
 A pool of 73 domain-aware loading messages rotates during brief generation, weighted toward active source domains.
 TokenEstimator provides character-based heuristic estimation at 3.5 characters per token with sentence-boundary truncation.
 Article body ingestion was documented as a planned capability in DECISIONS.md, with the distilledExcerpt field as the first step toward that architecture.
+
+## Phase 46
+
+The UI was restructured from developer-facing diagnostics to a product experience.
+Navigation changed from Today/Identity/Sources to Today/Radar/Settings, removing Identity audit from primary navigation.
+The Today screen now shows only the brief and the chat thread, with pull-to-refresh and auto-refresh on launch replacing the old header card with its refresh button.
+The brief is stored as the first message in the chat thread, making the conversation a unified flow from Malcome's opening take through the user's follow-up questions.
+Chat responses are grounded in signal evidence via a pre-composer that drafts from actual data before AFM smooths into conversation. Wikipedia context is fetched on-the-fly for background questions.
+The Radar screen shows clean signal and watchlist cards with abbreviated stat labels that never wrap.
+The Settings screen has source management with pack toggles and collapsed doctrine profiles, plus a "How Malcome Works" section written in Malcome's voice.
+Signal detail was rewritten in plain language — "two genuinely different parts of the scene noticed this independently" instead of "2 independent source families" — with score breakdowns collapsed behind a Developer details disclosure.
+Chat thinking state shows short calm messages ("Give me a second.", "Let me think about that.") while AFM responds.
+The Bandcamp Daily and Quietus RSS parser was fixed to extract lead artist names from multi-artist credit strings, with a RENORMALIZE_OBSERVATIONS command to re-apply parser fixes to stored data.
+Calendar event integration via EventKit was flagged as a planned feature.
