@@ -692,13 +692,19 @@ actor AppRepository {
                 sourceName: source.name
             )
 
-            // Also fix authorOrArtist if it looks like a credit string
+            // Also fix authorOrArtist if it's a credit string or staff byline
             let newAuthor: String?
-            if let author = obs.authorOrArtist, HTMLSupport.isLikelyCreditString(author) {
-                let lead = HTMLSupport.extractLeadArtist(from: author)
-                newAuthor = lead.isEmpty ? obs.authorOrArtist : lead
+            if let author = obs.authorOrArtist {
+                if HTMLSupport.isStaffByline(author, sourceName: source.name) {
+                    newAuthor = nil // Clear staff bylines entirely
+                } else if HTMLSupport.isLikelyCreditString(author) {
+                    let lead = HTMLSupport.extractLeadArtist(from: author)
+                    newAuthor = lead.isEmpty ? obs.authorOrArtist : lead
+                } else {
+                    newAuthor = obs.authorOrArtist
+                }
             } else {
-                newAuthor = obs.authorOrArtist
+                newAuthor = nil
             }
 
             let nameChanged = newNormalized != obs.normalizedEntityName
