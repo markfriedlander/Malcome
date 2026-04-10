@@ -52,13 +52,20 @@ struct MalcomeChatEngine: Sendable {
             turnNumber: userRecord.turnNumber
         )
 
-        // Fetch Wikipedia context if user is asking for background
+        // Fetch Wikipedia context with tier selection based on question type
         var wikipediaContext: String?
         if isBackgroundQuestion(userMessage) {
             let entityName = extractEntityFromQuestion(userMessage, signals: signals, watchlist: watchlist)
             if let name = entityName {
-                if let summary = await WikipediaClient.contextSummary(for: name) {
-                    wikipediaContext = summary.extract
+                if isComprehensiveDetailQuestion(userMessage) {
+                    // Full extract for "give me his discography", "everything about", etc.
+                    wikipediaContext = await WikipediaClient.fullExtract(for: name)
+                } else {
+                    // Summarized ~75 words for general "who is X" questions
+                    if let summary = await WikipediaClient.contextSummary(for: name) {
+                        let compressed = await WikipediaSummarizer.summarize(summary.extract, targetWords: 75)
+                        wikipediaContext = compressed
+                    }
                 }
             }
         }
@@ -221,6 +228,16 @@ struct MalcomeChatEngine: Sendable {
         }
 
         return sentences.joined(separator: " ")
+    }
+
+    private func isComprehensiveDetailQuestion(_ message: String) -> Bool {
+        let lower = message.lowercased()
+        let patterns = [
+            "discography", "filmography", "bibliography", "all of",
+            "complete", "everything", "full list", "all albums",
+            "all films", "all works", "career history", "entire",
+        ]
+        return patterns.contains { lower.contains($0) }
     }
 
     private func isBackgroundQuestion(_ message: String) -> Bool {

@@ -26,7 +26,7 @@ enum WikipediaClient {
 
     private static let cache = WikiCache()
 
-    // MARK: - Public Entry Point
+    // MARK: - Public Entry Points
 
     /// Fetch a Wikipedia context summary for an entity name.
     /// Returns nil on any failure — 404, network error, disambiguation, no entry.
@@ -48,6 +48,15 @@ enum WikipediaClient {
         // Cache and return
         await cache.set(cacheKey, summary)
         return summary
+    }
+
+    /// Returns the full Wikipedia extract for an entity. Used when the user asks for comprehensive detail.
+    /// Returns the cached extract if available, otherwise fetches fresh.
+    static func fullExtract(for entityName: String) async -> String? {
+        if let summary = await contextSummary(for: entityName) {
+            return summary.extract
+        }
+        return nil
     }
 
     // MARK: - Title Resolution (Strategies 1-4, skipping OpenSearch)
