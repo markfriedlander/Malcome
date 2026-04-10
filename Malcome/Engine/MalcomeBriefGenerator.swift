@@ -31,7 +31,7 @@ struct MalcomeBriefGenerator: BriefGenerating {
         let capped = capInput(input)
         let draftResult = DraftComposer.compose(from: capped)
         let body = await polishWithAFM(draftResult.text)
-        let title = briefTitle(from: capped)
+        let title = await briefTitle(from: capped, briefBody: body)
 
         let citations = draftResult.sourceReferences.enumerated().map { index, ref in
             BriefCitation(
@@ -103,14 +103,54 @@ struct MalcomeBriefGenerator: BriefGenerating {
 
     // MARK: - Title
 
-    private func briefTitle(from input: BriefingInput) -> String {
+    private func briefTitle(from input: BriefingInput, briefBody: String) async -> String {
         if let lead = input.signals.first {
-            return "\(lead.signal.canonicalName) and the Cultural Current"
+            if let afmTitle = await generateTitle(leadName: lead.signal.canonicalName, movement: lead.signal.movement, domain: lead.signal.domain) {
+                return afmTitle
+            }
+            return templateTitle(leadName: lead.signal.canonicalName, movement: lead.signal.movement)
         }
         if let lead = input.watchlistCandidates.first {
             return "Watching \(lead.title)"
         }
         return "Malcome Radar"
+    }
+
+    private func generateTitle(leadName: String, movement: SignalMovement, domain: CulturalDomain) async -> String? {
+        guard SystemLanguageModel.default.isAvailable else { return nil }
+
+        let movementHint: String
+        switch movement {
+        case .new: movementHint = "just appeared on the radar"
+        case .rising: movementHint = "is building momentum"
+        case .stable: movementHint = "keeps showing up consistently"
+        case .declining: movementHint = "is losing momentum"
+        }
+
+        let prompt = "Write a brief title (5-8 words) for a cultural radar brief where \(leadName) \(movementHint) in \(domain.label.lowercased()). Specific and interesting. No generic phrases. No quotes. Just the title text."
+
+        do {
+            let session = LanguageModelSession()
+            let response = try await session.respond(to: prompt)
+            let title = response.content
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "\"", with: "")
+                .replacingOccurrences(of: "\n", with: " ")
+            if title.count >= 5 && title.count <= 80 {
+                return title
+            }
+        } catch {}
+
+        return nil
+    }
+
+    private func templateTitle(leadName: String, movement: SignalMovement) -> String {
+        switch movement {
+        case .new: return "\(leadName) Just Showed Up"
+        case .rising: return "\(leadName) Is Building"
+        case .stable: return "The Scene Keeps Noticing \(leadName)"
+        case .declining: return "\(leadName) Is Cooling"
+        }
     }
 
     // Citations are now built from DraftResult.sourceReferences in generateBrief()

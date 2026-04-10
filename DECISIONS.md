@@ -467,6 +467,14 @@ Current seed size: 21MB with 2647 observations across 31 sources. Under the 50MB
 Reason:
 A fresh install with an empty database is nearly useless for weeks. The corroboration threshold requires historical depth that takes time to accumulate organically. The seed database provides months of pre-processed observations and entity history. The first-launch backfill covers the gap between the seed database snapshot and the current moment. Together they ensure every user gets a useful Malcome from first launch.
 
+## Signals require independent source family corroboration for the brief
+
+Decision:
+Signals fetched for the brief must have currentSourceFamilyCount >= 2. Single-family signals remain in the database for historical tracking and pathway learning but do not appear in the user-facing brief or lead the product.
+
+Reason:
+The signal engine allows single-family signals to graduate via progression stages or snapshot count, which is useful for internal intelligence. But the product-facing brief should only surface entities with genuinely independent corroboration — the same standard the watchlist applies. Flying Lotus appeared across Bandcamp Daily, Bandcamp LA Discover, and Bandcamp LA Tag, but all three are in the same Bandcamp source family. This is valuable internal evidence but not independent cultural agreement. The brief filter ensures users only see signals where different parts of the scene are independently arriving at the same conclusion.
+
 ## Editorial source entity extraction: headline over author
 
 Decision:

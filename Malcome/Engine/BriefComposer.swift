@@ -25,7 +25,9 @@ struct BriefComposer: Sendable {
     let generator: BriefGenerating
 
     func composeBrief() async throws -> BriefRecord {
-        let signals = try await repository.fetchTopSignals(limit: 6)
+        // Only surface signals with 2+ independent source families in the brief
+        let allSignals = try await repository.fetchTopSignals(limit: 12)
+        let signals = allSignals.filter { $0.currentSourceFamilyCount >= 2 }.prefix(6).map { $0 }
         let latestObservations = try await repository.fetchObservations(limit: 120)
         let sources = try await repository.fetchSources()
         let sourceInfluenceStats = try await repository.fetchSourceInfluenceStats(limit: 200)
