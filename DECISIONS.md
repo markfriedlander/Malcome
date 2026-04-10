@@ -440,6 +440,22 @@ Canonical merge confidence, merge summaries, aliases, and source-role evidence s
 Reason:
 Malcome will not be trustworthy unless a human can audit why a signal resolved to a given identity and where ambiguity remains.
 
+## Staff bylines must not become canonical entities
+
+Decision:
+When a source's dc:creator or author field contains the source publication name or a staff-credit pattern (e.g. "BrooklynVegan Staff", "Pitchfork Staff", "[Source] Editorial"), that value must be rejected as a canonical entity name. The parser should fall back to editorial entity inference from the title instead.
+
+Reason:
+A staff byline is publication metadata, not a cultural entity. When "BrooklynVegan Staff" becomes a canonical entity and leads the brief, the product sounds broken. The dc:creator preference path in the RSS parser needs a source-name byline filter before accepting a value as an entity.
+
+## Festival roundup and headliner content
+
+Decision:
+Malcome should not blanket-filter festival content. Undercard and smaller-stage acts at major festivals are legitimate early signal territory. The filter should target mainstream headliner roundups specifically — articles that lead with already-obvious names and treat them as discoveries.
+
+Reason:
+An article about emerging acts at Coachella is high-value cultural radar material. A generic "here's everything streaming from weekend one" piece that leads with DEVO is not — it is a coverage roundup, not an emergence signal. The roundup tag already fires for these articles; the fix is to downgrade roundup-tagged entities from the signal path unless they escape into independent corroboration, which is how the existing roundup downgrade logic works. The doctrine filter should preserve the distinction between coverage roundups and genuine scene-level festival observations.
+
 ## Re-normalization of stored observation entity names
 
 Decision:

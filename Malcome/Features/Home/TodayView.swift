@@ -70,6 +70,9 @@ struct TodayView: View {
             await appModel.refreshAll()
             await loadThread()
         }
+        .onChange(of: appModel.brief?.id) {
+            Task { await loadThread() }
+        }
     }
 
     // MARK: - Loading State

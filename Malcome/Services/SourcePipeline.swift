@@ -1604,7 +1604,11 @@ struct RSSFeedParser: SourceParsing {
             let subject: (name: String, entityType: EntityType, author: String?)
             let normalized: String
 
-            if !creator.isEmpty, HTMLSupport.isMeaningfulEntityName(HTMLSupport.normalizedAlias(creator)) {
+            let isStaffByline = HTMLSupport.isStaffByline(creator, sourceName: source.name)
+
+            if !creator.isEmpty, !isStaffByline,
+               !HTMLSupport.isLikelyCreditString(creator),
+               HTMLSupport.isMeaningfulEntityName(HTMLSupport.normalizedAlias(creator)) {
                 let cleanCreator = HTMLSupport.cleanText(creator)
                 subject = (name: cleanCreator, entityType: .creator, author: cleanCreator)
                 normalized = HTMLSupport.normalizedEntityName(

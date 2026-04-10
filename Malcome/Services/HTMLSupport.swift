@@ -567,7 +567,9 @@ enum HTMLSupport {
         switch parserType {
         case .rssFeed:
             if let author = authorOrArtist, !author.isEmpty {
-                if looksLikeCreditString(author) {
+                if isStaffByline(author, sourceName: sourceName) {
+                    // Staff byline — fall through to title inference
+                } else if looksLikeCreditString(author) {
                     let leadArtist = extractLeadArtist(from: author)
                     if !leadArtist.isEmpty, isMeaningfulEntityName(normalizedAlias(leadArtist)) {
                         return normalizedEntityName(title: leadArtist, author: leadArtist, fallbackURL: url)
@@ -611,6 +613,28 @@ enum HTMLSupport {
         let segments = text.components(separatedBy: ", ")
         guard let first = segments.first else { return "" }
         return cleanText(first)
+    }
+
+    /// Detects staff bylines that should not become canonical entities.
+    /// Checks if the author field contains the source name or a known staff-credit pattern.
+    nonisolated static func isStaffByline(_ author: String, sourceName: String) -> Bool {
+        let lower = author.lowercased()
+        let sourceNorm = sourceName.lowercased()
+
+        // Direct source name match or containment
+        if lower.contains(sourceNorm) { return true }
+        if sourceNorm.contains(lower) && lower.count >= 4 { return true }
+
+        // Staff-credit patterns
+        let staffPatterns = [
+            "staff", "editorial", "editor", "editors", "team",
+            "contributor", "contributors", "admin", "desk",
+        ]
+        for pattern in staffPatterns {
+            if lower.hasSuffix(" \(pattern)") || lower == pattern { return true }
+        }
+
+        return false
     }
 
     /// Detects Bandcamp-style credit strings. Public for use in renormalization.
