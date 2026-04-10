@@ -467,6 +467,14 @@ Current seed size: 21MB with 2647 observations across 31 sources. Under the 50MB
 Reason:
 A fresh install with an empty database is nearly useless for weeks. The corroboration threshold requires historical depth that takes time to accumulate organically. The seed database provides months of pre-processed observations and entity history. The first-launch backfill covers the gap between the seed database snapshot and the current moment. Together they ensure every user gets a useful Malcome from first launch.
 
+## Domain-specific context fallbacks (planned)
+
+Decision:
+When Wikipedia returns no entry for a cultural entity, Malcome should fall back to domain-specific APIs: MusicBrainz for music artists, Artsy for visual artists, TMDB for film entities. These are planned but not yet built. Wikipedia is the primary context source.
+
+Reason:
+Emerging cultural entities often lack Wikipedia entries — that is part of what makes them emerging. Domain-specific APIs have broader coverage of lesser-known creators. MusicBrainz, Artsy, and TMDB all have public APIs with no authentication required for basic lookups. The architecture leaves room for these fallbacks without requiring a rewrite.
+
 ## Signals require independent source family corroboration for the brief
 
 Decision:

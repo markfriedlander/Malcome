@@ -29,7 +29,7 @@ struct MalcomeBriefGenerator: BriefGenerating {
 
     func generateBrief(from input: BriefingInput) async throws -> BriefRecord {
         let capped = capInput(input)
-        let draftResult = DraftComposer.compose(from: capped)
+        let draftResult = await DraftComposer.compose(from: capped)
         let body = await polishWithAFM(draftResult.text)
         let title = await briefTitle(from: capped, briefBody: body)
 
@@ -174,7 +174,7 @@ struct DraftResult {
 
 enum DraftComposer {
 
-    static func compose(from input: BriefingInput) -> DraftResult {
+    static func compose(from input: BriefingInput) async -> DraftResult {
         var tracker = SourceTracker()
         let text: String
         if input.signals.isEmpty && input.watchlistCandidates.isEmpty {
@@ -182,14 +182,9 @@ enum DraftComposer {
         } else if input.signals.isEmpty {
             text = composeWatchlistOnly(input, tracker: &tracker)
         } else {
-            text = composeFullBrief(input, tracker: &tracker)
+            text = await composeFullBrief(input, tracker: &tracker)
         }
         return DraftResult(text: text, sourceReferences: tracker.references)
-    }
-
-    // Legacy string-only access for chat engine
-    static func composeText(from input: BriefingInput) -> String {
-        compose(from: input).text
     }
 
     private struct SourceTracker {
@@ -219,15 +214,15 @@ enum DraftComposer {
 
     // MARK: - Full Brief (signals + watchlist)
 
-    private static func composeFullBrief(_ input: BriefingInput, tracker: inout SourceTracker) -> String {
+    private static func composeFullBrief(_ input: BriefingInput, tracker: inout SourceTracker) async -> String {
         var paragraphs: [String] = []
 
         if let lead = input.signals.first {
-            paragraphs.append(composeLeadSignal(lead, tracker: &tracker))
+            paragraphs.append(await composeLeadSignal(lead, tracker: &tracker))
         }
 
         for packet in input.signals.dropFirst() {
-            paragraphs.append(composeSecondarySignal(packet, tracker: &tracker))
+            paragraphs.append(await composeSecondarySignal(packet, tracker: &tracker))
         }
 
         if !input.watchlistCandidates.isEmpty {
@@ -258,22 +253,30 @@ enum DraftComposer {
 
     // MARK: - Lead Signal
 
-    private static func composeLeadSignal(_ packet: BriefingInput.SignalPacket, tracker: inout SourceTracker) -> String {
+    private static func composeLeadSignal(_ packet: BriefingInput.SignalPacket, tracker: inout SourceTracker) async -> String {
         let name = packet.signal.canonicalName
         let sources = packet.sourceNames
         let domain = packet.signal.domain.label.lowercased()
         let entityType = packet.signal.entityType
-        let context = bestExcerptContext(from: packet.observations)
+
+        // Wikipedia context first, then distilled excerpt, then entity type phrase
+        let wikiContext = await wikiContextPhrase(for: name)
+        let excerptContext = bestExcerptContext(from: packet.observations)
 
         var sentences: [String] = []
-        sentences.append("\(name) is the one right now.")
 
-        if let context {
-            sentences.append(context)
+        if let wiki = wikiContext {
+            // Weave Wikipedia context into the opening: "Flying Lotus — producer, rapper out of LA —"
+            sentences.append("\(name) — \(wiki) — is the one right now.")
         } else {
-            let typePhrase = entityTypePhrase(entityType)
-            if !typePhrase.isEmpty {
-                sentences.append(typePhrase)
+            sentences.append("\(name) is the one right now.")
+            if let context = excerptContext {
+                sentences.append(context)
+            } else {
+                let typePhrase = entityTypePhrase(entityType)
+                if !typePhrase.isEmpty {
+                    sentences.append(typePhrase)
+                }
             }
         }
 
@@ -299,12 +302,13 @@ enum DraftComposer {
 
     // MARK: - Secondary Signals
 
-    private static func composeSecondarySignal(_ packet: BriefingInput.SignalPacket, tracker: inout SourceTracker) -> String {
+    private static func composeSecondarySignal(_ packet: BriefingInput.SignalPacket, tracker: inout SourceTracker) async -> String {
         let name = packet.signal.canonicalName
         let sources = packet.sourceNames
         let domain = packet.signal.domain.label.lowercased()
         let movement = packet.signal.movement
-        let context = bestExcerptContext(from: packet.observations)
+        let wikiContext = await wikiContextPhrase(for: name)
+        let context = wikiContext ?? bestExcerptContext(from: packet.observations)
 
         let citedSources = sources.prefix(3).enumerated().map { index, sourceName -> String in
             let obs = index < packet.observations.count ? packet.observations[index] : packet.observations.first
@@ -424,6 +428,41 @@ enum DraftComposer {
 
     private static func composeEmptyState() -> String {
         "I have not landed enough corroboration yet to give you a real read. The source network is still building. I will have something when independent lanes start agreeing."
+    }
+
+    // MARK: - Wikipedia Context
+
+    /// Fetches Wikipedia context and extracts a concise descriptive phrase.
+    /// "Flying Lotus, born Steven Ellison, is an American musician..." → "producer, rapper, filmmaker out of Los Angeles"
+    private static func wikiContextPhrase(for entityName: String) async -> String? {
+        guard let summary = await WikipediaClient.contextSummary(for: entityName) else { return nil }
+
+        let firstSentence = summary.firstSentence
+        guard !firstSentence.isEmpty else { return nil }
+
+        // Try to extract the descriptive part after "is a/an"
+        let patterns = [
+            #"(?:is|was) (?:an? )(.+?)(?:\.|$)"#,
+            #"(?:are|were) (?:an? )(.+?)(?:\.|$)"#,
+        ]
+
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
+               let match = regex.firstMatch(in: firstSentence, range: NSRange(firstSentence.startIndex..., in: firstSentence)),
+               let range = Range(match.range(at: 1), in: firstSentence) {
+                let descriptor = String(firstSentence[range]).trimmingCharacters(in: .whitespaces)
+                if descriptor.count >= 5 && descriptor.count <= 200 {
+                    return MalcomeTokenEstimator.truncateAtSentenceBoundary(descriptor, maxChars: 120)
+                }
+            }
+        }
+
+        // Fallback: use the first sentence as-is if short enough
+        if firstSentence.count <= 150 {
+            return firstSentence
+        }
+
+        return nil
     }
 
     // MARK: - Excerpt Context

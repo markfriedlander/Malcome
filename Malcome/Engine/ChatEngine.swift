@@ -54,11 +54,12 @@ struct MalcomeChatEngine: Sendable {
 
         // Fetch Wikipedia context if user is asking for background
         var wikipediaContext: String?
-        if WikipediaContext.isBackgroundQuestion(userMessage) {
-            // Extract entity name from the question
+        if isBackgroundQuestion(userMessage) {
             let entityName = extractEntityFromQuestion(userMessage, signals: signals, watchlist: watchlist)
             if let name = entityName {
-                wikipediaContext = await WikipediaContext.fetchSummary(for: name)
+                if let summary = await WikipediaClient.contextSummary(for: name) {
+                    wikipediaContext = summary.extract
+                }
             }
         }
 
@@ -220,6 +221,17 @@ struct MalcomeChatEngine: Sendable {
         }
 
         return sentences.joined(separator: " ")
+    }
+
+    private func isBackgroundQuestion(_ message: String) -> Bool {
+        let lower = message.lowercased()
+        let patterns = [
+            "who is", "who are", "what is", "tell me about",
+            "tell me more about", "what do you know about",
+            "give me background", "background on",
+            "what should i know about", "fill me in on",
+        ]
+        return patterns.contains { lower.contains($0) }
     }
 
     private func extractEntityFromQuestion(

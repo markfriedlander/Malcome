@@ -200,6 +200,18 @@ If AFM returns malformed JSON or an empty array, the pipeline falls back to sing
 If AFM is unavailable, the roundup is stored as a single observation with its headline-inferred entity name.
 This is the highest-impact change for signal density without adding sources or lowering thresholds.
 
+Wikipedia context layer:
+
+WikipediaClient provides entity context from Wikipedia for both brief generation and chat responses.
+Adapted from Microdoc's tested WikipediaClient with resolver and fetch logic.
+Uses a four-strategy title resolution pipeline: direct lookup, descriptor stripping, parenthetical removal, colon splitting. OpenSearch (Strategy 5) is excluded because cultural entity names often resolve to wrong articles.
+In-memory actor cache prevents redundant API calls within a session.
+Single entry point: contextSummary(for:) returns Summary or nil. Never throws.
+DraftComposer weaves the first sentence of Wikipedia context into brief prose when available.
+ChatEngine uses Wikipedia context for background questions.
+Falls back to distilledExcerpt when Wikipedia returns nil.
+Domain-specific fallbacks (MusicBrainz, Artsy, TMDB) are planned but not yet built.
+
 Observation excerpt distillation:
 
 Observations may carry a distilledExcerpt field alongside the raw excerpt.
