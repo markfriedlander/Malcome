@@ -54,14 +54,19 @@ struct MalcomeChatEngine: Sendable {
 
         // Fetch Wikipedia context with tier selection based on question type
         var wikipediaContext: String?
-        if isBackgroundQuestion(userMessage) {
-            let entityName = extractEntityFromQuestion(userMessage, signals: signals, watchlist: watchlist)
+        let needsWiki = isBackgroundQuestion(userMessage) || isComprehensiveDetailQuestion(userMessage)
+        if needsWiki {
+            var entityName = extractEntityFromQuestion(userMessage, signals: signals, watchlist: watchlist)
+
+            // Pronoun resolution: if no entity found, use the last-mentioned entity from recent chat
+            if entityName == nil {
+                entityName = lastMentionedEntity(in: existingMessages, signals: signals, watchlist: watchlist)
+            }
+
             if let name = entityName {
                 if isComprehensiveDetailQuestion(userMessage) {
-                    // Full extract for "give me his discography", "everything about", etc.
                     wikipediaContext = await WikipediaClient.fullExtract(for: name)
                 } else {
-                    // Summarized ~75 words for general "who is X" questions
                     if let summary = await WikipediaClient.contextSummary(for: name) {
                         let compressed = await WikipediaSummarizer.summarize(summary.extract, targetWords: 75)
                         wikipediaContext = compressed
@@ -228,6 +233,29 @@ struct MalcomeChatEngine: Sendable {
         }
 
         return sentences.joined(separator: " ")
+    }
+
+    /// Find the most recently mentioned entity in chat history for pronoun resolution.
+    private func lastMentionedEntity(
+        in messages: [ChatMessageRecord],
+        signals: [SignalCandidateRecord],
+        watchlist: [WatchlistCandidate]
+    ) -> String? {
+        // Search recent messages (newest first) for known entity names
+        for message in messages.reversed() {
+            let content = message.content.lowercased()
+            for signal in signals {
+                if content.contains(signal.canonicalName.lowercased()) {
+                    return signal.canonicalName
+                }
+            }
+            for candidate in watchlist {
+                if content.contains(candidate.title.lowercased()) {
+                    return candidate.title
+                }
+            }
+        }
+        return nil
     }
 
     private func isComprehensiveDetailQuestion(_ message: String) -> Bool {
