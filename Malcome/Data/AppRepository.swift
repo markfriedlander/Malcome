@@ -689,14 +689,18 @@ actor AppRepository {
                 authorOrArtist: obs.authorOrArtist,
                 url: obs.url,
                 parserType: source.parserType,
-                sourceName: source.name
+                sourceName: source.name,
+                sourceClassification: source.classification
             )
 
-            // Also fix authorOrArtist if it's a credit string or staff byline
+            // Also fix authorOrArtist if it's a credit string, staff byline, or editorial byline
             let newAuthor: String?
             if let author = obs.authorOrArtist {
                 if HTMLSupport.isStaffByline(author, sourceName: source.name) {
-                    newAuthor = nil // Clear staff bylines entirely
+                    newAuthor = nil
+                } else if source.classification == .editorial && source.parserType == .rssFeed {
+                    // Editorial RSS bylines are journalist names, not cultural entities
+                    newAuthor = nil
                 } else if HTMLSupport.isLikelyCreditString(author) {
                     let lead = HTMLSupport.extractLeadArtist(from: author)
                     newAuthor = lead.isEmpty ? obs.authorOrArtist : lead

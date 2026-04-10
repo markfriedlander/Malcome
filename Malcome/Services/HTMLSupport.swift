@@ -562,11 +562,15 @@ enum HTMLSupport {
         authorOrArtist: String?,
         url: String,
         parserType: ParserType,
-        sourceName: String
+        sourceName: String,
+        sourceClassification: SourceClassification = .editorial
     ) -> String {
         switch parserType {
         case .rssFeed:
-            if let author = authorOrArtist, !author.isEmpty {
+            // For editorial sources, the author is a journalist byline, not a cultural entity.
+            // Skip directly to title inference.
+            let isEditorial = sourceClassification == .editorial
+            if let author = authorOrArtist, !author.isEmpty, !isEditorial {
                 if isStaffByline(author, sourceName: sourceName) {
                     // Staff byline — fall through to title inference
                 } else if looksLikeCreditString(author) {
@@ -629,6 +633,7 @@ enum HTMLSupport {
         let staffPatterns = [
             "staff", "editorial", "editor", "editors", "team",
             "contributor", "contributors", "admin", "desk",
+            "news desk",
         ]
         for pattern in staffPatterns {
             if lower.hasSuffix(" \(pattern)") || lower == pattern { return true }

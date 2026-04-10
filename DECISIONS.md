@@ -440,6 +440,22 @@ Canonical merge confidence, merge summaries, aliases, and source-role evidence s
 Reason:
 Malcome will not be trustworthy unless a human can audit why a signal resolved to a given identity and where ambiguity remains.
 
+## Editorial source entity extraction: headline over author
+
+Decision:
+For sources classified as editorial, the RSS dc:creator / author field must not be used as the primary entity candidate. The subject of an editorial article lives in the headline, not the byline. The dc:creator preference path in the RSS parser is restricted to non-editorial sources (discovery, community, venue, creator platforms) where the author IS the cultural entity.
+
+Reason:
+Editor and journalist names in the dc:creator field are indistinguishable from artist names in the data structure. "Mika Lee" (an Artforum editor) looks identical to "Mika Lee" (an artist) at the parser level. When the RSS parser preferred dc:creator for all sources, editorial bylines became canonical entities and led the brief. The headline is the reliable signal for what an editorial article is about. The author field is publication metadata.
+
+## AFM-assisted subject classification at parse time (planned)
+
+Decision:
+Malcome should eventually use a small AFM call at parse time to classify the primary subject and subject type from an article headline and first paragraph. This handles cases where even the headline does not contain a trackable cultural entity — AFM would correctly classify an archaeological discovery article as geography rather than a creator or work worth tracking.
+
+Reason:
+Headline inference patterns cover many editorial title formats but not all. Some articles have subjects that require understanding the content to classify correctly. A small AFM classification call (entity name, entity type, confidence) at ingest time would dramatically improve entity extraction quality for edge cases. This is the medium-term fix. The short-term fix is the editorial source entity priority change above.
+
 ## Staff bylines must not become canonical entities
 
 Decision:

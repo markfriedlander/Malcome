@@ -383,7 +383,7 @@ enum DraftComposer {
     // MARK: - Empty State
 
     private static func composeEmptyState() -> String {
-        "Malcome has not landed enough corroboration yet to give you a real read. The source network is still building. I will have something when independent lanes start agreeing."
+        "I have not landed enough corroboration yet to give you a real read. The source network is still building. I will have something when independent lanes start agreeing."
     }
 
     // MARK: - Excerpt Context

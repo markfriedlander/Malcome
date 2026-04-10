@@ -1605,8 +1605,12 @@ struct RSSFeedParser: SourceParsing {
             let normalized: String
 
             let isStaffByline = HTMLSupport.isStaffByline(creator, sourceName: source.name)
+            // For editorial sources, the dc:creator is a journalist/editor byline, not a cultural entity.
+            // The subject lives in the headline. Only use dc:creator for non-editorial sources
+            // (discovery, community, venue) where the author IS the artist.
+            let isEditorialSource = source.classification == .editorial
 
-            if !creator.isEmpty, !isStaffByline,
+            if !creator.isEmpty, !isStaffByline, !isEditorialSource,
                !HTMLSupport.isLikelyCreditString(creator),
                HTMLSupport.isMeaningfulEntityName(HTMLSupport.normalizedAlias(creator)) {
                 let cleanCreator = HTMLSupport.cleanText(creator)
