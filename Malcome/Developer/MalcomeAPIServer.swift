@@ -544,6 +544,17 @@ class MalcomeAPIServer {
             SourcePipeline.devCadenceFloorSeconds = nil
             return (200, #"{"status":"ok","command":"SET_POLITENESS_MODE","mode":"production"}"#)
 
+        } else if trimmed == "EXTRACT_ROUNDUPS" {
+            guard let model = appModel else {
+                return (503, #"{"error":"AppViewModel unavailable"}"#)
+            }
+            do {
+                let count = try await extractRoundupEntities(repository: model.container.repository)
+                return (200, "{\"status\":\"ok\",\"command\":\"EXTRACT_ROUNDUPS\",\"entitiesExtracted\":\(count)}")
+            } catch {
+                return (500, "{\"error\":\(jsonEscape(error.localizedDescription))}")
+            }
+
         } else if trimmed == "RENORMALIZE_OBSERVATIONS" {
             guard let model = appModel else {
                 return (503, #"{"error":"AppViewModel unavailable"}"#)
@@ -756,6 +767,48 @@ class MalcomeAPIServer {
             .replacingOccurrences(of: "\r", with: "\\r")
             .replacingOccurrences(of: "\t", with: "\\t")
         return "\"\(escaped)\""
+    }
+
+    // MARK: - Roundup Extraction for Existing Observations
+
+    private func extractRoundupEntities(repository: AppRepository) async throws -> Int {
+        let observations = try await repository.fetchObservations()
+        let sources = try await repository.fetchSources()
+        let sourcesByID = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0) })
+
+        let roundups = observations.filter { $0.tags.contains("roundup") && !$0.tags.contains("roundup_source") }
+        var totalExtracted = 0
+
+        for roundup in roundups {
+            guard let source = sourcesByID[roundup.sourceID] else { continue }
+
+            let entities = await RoundupExtractor.extractEntities(
+                title: roundup.title,
+                excerpt: roundup.excerpt ?? ""
+            )
+
+            guard !entities.isEmpty else { continue }
+
+            let drafts = RoundupExtractor.draftsFromExtraction(
+                entities: entities,
+                originalTitle: roundup.title,
+                originalURL: roundup.url,
+                originalExcerpt: roundup.excerpt ?? "",
+                source: source,
+                fetchedAt: roundup.scrapedAt,
+                publishedAt: roundup.publishedAt,
+                tags: roundup.tags
+            )
+
+            let inserted = try await repository.storeObservations(
+                snapshotID: roundup.snapshotID,
+                sourceID: roundup.sourceID,
+                drafts: drafts
+            )
+            totalExtracted += inserted
+        }
+
+        return totalExtracted
     }
 
     // MARK: - HTTP Response
