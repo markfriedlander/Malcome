@@ -549,8 +549,8 @@ class MalcomeAPIServer {
                 return (503, #"{"error":"AppViewModel unavailable"}"#)
             }
             do {
-                let count = try await extractRoundupEntities(repository: model.container.repository)
-                return (200, "{\"status\":\"ok\",\"command\":\"EXTRACT_ROUNDUPS\",\"entitiesExtracted\":\(count)}")
+                let result = try await extractRoundupEntities(repository: model.container.repository)
+                return (200, "{\"status\":\"ok\",\"command\":\"EXTRACT_ROUNDUPS\",\"roundupsFound\":\(result.roundupsFound),\"entitiesExtracted\":\(result.entitiesExtracted),\"afmCalls\":\(result.afmCalls)}")
             } catch {
                 return (500, "{\"error\":\(jsonEscape(error.localizedDescription))}")
             }
@@ -771,17 +771,25 @@ class MalcomeAPIServer {
 
     // MARK: - Roundup Extraction for Existing Observations
 
-    private func extractRoundupEntities(repository: AppRepository) async throws -> Int {
+    private struct ExtractionResult {
+        let roundupsFound: Int
+        let entitiesExtracted: Int
+        let afmCalls: Int
+    }
+
+    private func extractRoundupEntities(repository: AppRepository) async throws -> ExtractionResult {
         let observations = try await repository.fetchObservations()
         let sources = try await repository.fetchSources()
         let sourcesByID = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0) })
 
         let roundups = observations.filter { $0.tags.contains("roundup") && !$0.tags.contains("roundup_source") }
         var totalExtracted = 0
+        var afmCalls = 0
 
         for roundup in roundups {
             guard let source = sourcesByID[roundup.sourceID] else { continue }
 
+            afmCalls += 1
             let entities = await RoundupExtractor.extractEntities(
                 title: roundup.title,
                 excerpt: roundup.excerpt ?? ""
@@ -808,7 +816,7 @@ class MalcomeAPIServer {
             totalExtracted += inserted
         }
 
-        return totalExtracted
+        return ExtractionResult(roundupsFound: roundups.count, entitiesExtracted: totalExtracted, afmCalls: afmCalls)
     }
 
     // MARK: - HTTP Response

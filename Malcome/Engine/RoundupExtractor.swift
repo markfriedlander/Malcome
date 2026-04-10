@@ -43,13 +43,21 @@ enum RoundupExtractor {
 
     /// Defensively parse the JSON response from AFM.
     private static func parseEntities(from text: String) -> [ExtractedEntity] {
-        // Find the JSON array in the response — AFM may add surrounding text
-        guard let arrayStart = text.firstIndex(of: "["),
-              let arrayEnd = text.lastIndex(of: "]") else {
+        // Strip markdown code fences if present (AFM often wraps JSON in ```json ... ```)
+        var cleaned = text
+        if cleaned.contains("```") {
+            cleaned = cleaned.replacingOccurrences(of: "```json", with: "")
+                .replacingOccurrences(of: "```", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // Find the JSON array
+        guard let arrayStart = cleaned.firstIndex(of: "["),
+              let arrayEnd = cleaned.lastIndex(of: "]") else {
             return []
         }
 
-        let jsonString = String(text[arrayStart...arrayEnd])
+        let jsonString = String(cleaned[arrayStart...arrayEnd])
         guard let data = jsonString.data(using: .utf8) else { return [] }
 
         guard let array = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
@@ -104,13 +112,17 @@ enum RoundupExtractor {
                 ? "Mentioned in: \(originalTitle)"
                 : entity.context
 
+            // Use an anchor fragment in the URL so deduplication doesn't collide with the original article
+            let entityAnchor = entity.name.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) ?? entity.name
+            let entityURL = "\(originalURL)#entity-\(entityAnchor)"
+
             return ObservationDraft(
                 domain: source.domain,
                 entityType: entity.entityType,
-                externalIDOrHash: HTMLSupport.hash("\(originalURL)#\(entity.name)"),
+                externalIDOrHash: HTMLSupport.hash(entityURL),
                 title: entity.name,
                 subtitle: source.name,
-                url: originalURL,
+                url: entityURL,
                 authorOrArtist: entity.name,
                 tags: entityTags,
                 location: source.city == .global ? nil : source.city.displayName,
