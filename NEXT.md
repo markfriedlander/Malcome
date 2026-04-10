@@ -39,6 +39,8 @@ Use the new in-product doctrine profile as part of source review whenever adding
 13 Keep the outbound-link affordance consistent anywhere tapping leaves Malcome, including future exploration surfaces.
 14 Validate the new derived event-instance identity on-device after a fresh refresh, then decide whether the next step should be a dedicated event table or whether the derived key is sufficient for cross-source event matching in v1.
 
+15 Add calendar event integration via EventKit so Malcome can offer to add shows, openings, and releases to the user's calendar when an entity has date information. Native Apple framework, no dependencies. The architecture should surface date-bearing observations through the entity detail and chat layers.
+
 ## Do not expand source count broadly yet.
 
 Controlled breadth with quality guardrails.

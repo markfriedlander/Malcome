@@ -415,8 +415,12 @@ The summarizer is skipped entirely if older history fits within the token budget
 Chat message storage:
 
 chat_messages table in the existing SQLite database.
-Fields: id, brief_id (foreign key to current brief cycle), role (user or malcome), content, timestamp, embedding (NLEmbedding blob for future semantic search).
-Rows are deleted when a new brief generates.
+Fields: id, brief_id (foreign key to current brief cycle), role (user or malcome), content, timestamp, turn_number.
+The brief itself is stored as the first message in the chat thread with role malcome and turn_number 0.
+This makes the conversation history complete and searchable: past briefs and the conversations that followed them live in the same table.
+Future briefs can reference past conversations in their construction.
+When a new brief generates, it is inserted as a new first message with the new brief_id. Previous brief cycles remain in the table for historical reference.
+The Today screen renders the entire thread as a unified conversation: brief as the opening message, user questions and Malcome responses following naturally.
 
 Voice prompt:
 

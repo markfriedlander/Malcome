@@ -52,13 +52,24 @@ struct MalcomeChatEngine: Sendable {
             turnNumber: userRecord.turnNumber
         )
 
+        // Fetch Wikipedia context if user is asking for background
+        var wikipediaContext: String?
+        if WikipediaContext.isBackgroundQuestion(userMessage) {
+            // Extract entity name from the question
+            let entityName = extractEntityFromQuestion(userMessage, signals: signals, watchlist: watchlist)
+            if let name = entityName {
+                wikipediaContext = await WikipediaContext.fetchSummary(for: name)
+            }
+        }
+
         // Assemble context
         let prompt = assemblePrompt(
             userMessage: userMessage,
             briefBody: briefBody,
             signals: signals,
             watchlist: watchlist,
-            recentMessages: existingMessages
+            recentMessages: existingMessages,
+            wikipediaContext: wikipediaContext
         )
 
         // Call AFM
@@ -94,13 +105,15 @@ struct MalcomeChatEngine: Sendable {
         briefBody: String,
         signals: [SignalCandidateRecord],
         watchlist: [WatchlistCandidate],
-        recentMessages: [ChatMessageRecord]
+        recentMessages: [ChatMessageRecord],
+        wikipediaContext: String? = nil
     ) -> String {
         let draft = composeDraftResponse(
             userMessage: userMessage,
             briefBody: briefBody,
             signals: signals,
-            watchlist: watchlist
+            watchlist: watchlist,
+            wikipediaContext: wikipediaContext
         )
 
         return Self.chatPrompt + "\n" + draft
@@ -108,13 +121,12 @@ struct MalcomeChatEngine: Sendable {
 
     // MARK: - Draft Response Composer
 
-    /// Pre-composes a grounded draft answer from actual signal evidence.
-    /// AFM's job is to smooth this into natural conversation, not generate from training knowledge.
     private func composeDraftResponse(
         userMessage: String,
         briefBody: String,
         signals: [SignalCandidateRecord],
-        watchlist: [WatchlistCandidate]
+        watchlist: [WatchlistCandidate],
+        wikipediaContext: String? = nil
     ) -> String {
         let query = userMessage.lowercased()
 
@@ -129,15 +141,28 @@ struct MalcomeChatEngine: Sendable {
         }
 
         if let signal = matchedSignal {
-            return draftSignalResponse(signal)
+            var draft = draftSignalResponse(signal)
+            if let wiki = wikipediaContext {
+                draft += " For background — \(wiki)"
+            }
+            return draft
         }
 
         if let candidate = matchedWatch {
-            return draftWatchlistResponse(candidate)
+            var draft = draftWatchlistResponse(candidate)
+            if let wiki = wikipediaContext {
+                draft += " For background — \(wiki)"
+            }
+            return draft
         }
 
-        // No match — honest about what we don't have
-        return "I have not seen that in my sources yet. I can only speak to what the source network is showing me right now, and that name has not come through. That does not mean it is not happening — it means I do not have the evidence to say anything useful about it yet."
+        // No match but Wikipedia has context
+        if let wiki = wikipediaContext {
+            return "I have not seen that name in my current sources yet, but here is some background. \(wiki) If this starts showing up in my source network, I will flag it."
+        }
+
+        // No match, no Wikipedia — honest about what we don't have
+        return "I do not have much background on this one yet — which is part of why it is interesting if my sources are starting to notice them. I can only speak to what the source network is showing me right now."
     }
 
     private func draftSignalResponse(_ signal: SignalCandidateRecord) -> String {
@@ -195,6 +220,46 @@ struct MalcomeChatEngine: Sendable {
         }
 
         return sentences.joined(separator: " ")
+    }
+
+    private func extractEntityFromQuestion(
+        _ message: String,
+        signals: [SignalCandidateRecord],
+        watchlist: [WatchlistCandidate]
+    ) -> String? {
+        let lower = message.lowercased()
+
+        // Check known signals first
+        for signal in signals {
+            if lower.contains(signal.canonicalName.lowercased()) {
+                return signal.canonicalName
+            }
+        }
+        for candidate in watchlist {
+            if lower.contains(candidate.title.lowercased()) {
+                return candidate.title
+            }
+        }
+
+        // Try to extract from common question patterns
+        let patterns = [
+            #"(?i)who (?:is|are) (.+?)[\?\.]?$"#,
+            #"(?i)tell me (?:more )?about (.+?)[\?\.]?$"#,
+            #"(?i)what (?:is|are) (.+?)[\?\.]?$"#,
+            #"(?i)background on (.+?)[\?\.]?$"#,
+            #"(?i)fill me in on (.+?)[\?\.]?$"#,
+        ]
+
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: message, range: NSRange(message.startIndex..., in: message)),
+               let range = Range(match.range(at: 1), in: message) {
+                let extracted = String(message[range]).trimmingCharacters(in: .whitespaces)
+                if !extracted.isEmpty { return extracted }
+            }
+        }
+
+        return nil
     }
 }
 

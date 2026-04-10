@@ -12,29 +12,53 @@ struct SignalDetailView: View {
     @State private var aliases: [EntityAliasRecord] = []
     @State private var sourceRoles: [EntitySourceRoleRecord] = []
     @State private var isLoading = false
+    @State private var showDevDetails = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 12) {
+                // Header
+                VStack(alignment: .leading, spacing: 10) {
                     Text(signal.canonicalName)
-                        .font(.system(size: 30, weight: .black, design: .rounded))
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
                         .foregroundStyle(MalcomePalette.primary)
-                    Text(signal.evidenceSummary)
-                        .foregroundStyle(MalcomePalette.secondary)
-                    Text(condensed(signal.movementSummary))
-                        .font(.headline)
-                        .foregroundStyle(MalcomePalette.primary)
+
+                    HStack(spacing: 8) {
+                        badge(signal.movement.label, color: movementColor)
+                        badge(signal.domain.label, color: .orange)
+                        badge(signal.entityType.rawValue.replacingOccurrences(of: "_", with: " ").capitalized, color: .indigo)
+                    }
                 }
                 .cardStyle()
 
-                overviewCard
-                statusCard
-                investigationCard
-                scoreCard
-                identityCard
-                timelineCard
+                // Plain language summary
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("What I'm seeing")
+                        .sectionTitle()
 
+                    Text(plainLanguageSummary)
+                        .font(.subheadline)
+                        .foregroundStyle(MalcomePalette.primary.opacity(0.9))
+
+                    if !signal.supportingSourceIDs.isEmpty {
+                        Text("Sources: \(signal.supportingSourceIDs.map(appModel.sourceName(for:)).joined(separator: ", "))")
+                            .font(.caption)
+                            .foregroundStyle(MalcomePalette.tertiary)
+                    }
+                }
+                .cardStyle()
+
+                // Trajectory
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Trajectory")
+                        .sectionTitle()
+                    trajectoryRow(label: signal.maturity.label, text: plainMaturity)
+                    Divider().background(MalcomePalette.stroke)
+                    trajectoryRow(label: signal.lifecycleState.label, text: plainLifecycle)
+                }
+                .cardStyle()
+
+                // Evidence
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Evidence")
                         .sectionTitle()
@@ -42,10 +66,9 @@ struct SignalDetailView: View {
                     if isLoading && evidence.isEmpty {
                         ProgressView()
                     } else if evidence.isEmpty {
-                        PlaceholderCard(
-                            title: "No evidence yet",
-                            message: "This signal exists in the scoring layer, but we don’t have cached evidence to show right now."
-                        )
+                        Text("No cached evidence to show right now.")
+                            .font(.caption)
+                            .foregroundStyle(MalcomePalette.tertiary)
                     } else {
                         ForEach(evidence) { observation in
                             ObservationCard(
@@ -55,6 +78,42 @@ struct SignalDetailView: View {
                         }
                     }
                 }
+
+                // Timeline
+                if let history = entityHistory {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Timeline")
+                            .sectionTitle()
+                        Text("First seen \(history.firstSeenAt.formatted(date: .abbreviated, time: .omitted)), last seen \(history.lastSeenAt.formatted(date: .abbreviated, time: .omitted)). \(history.appearanceCount) total mentions across \(history.sourceDiversity) sources.")
+                            .font(.caption)
+                            .foregroundStyle(MalcomePalette.secondary)
+                    }
+                    .cardStyle()
+                }
+
+                // Developer details — collapsed
+                DisclosureGroup("Developer details", isExpanded: $showDevDetails) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        devRow("Emergence", signal.emergenceScore)
+                        devRow("Growth", signal.growthScore)
+                        devRow("Diversity", signal.diversityScore)
+                        devRow("Repeat", signal.repeatAppearanceScore)
+                        devRow("Progression", signal.progressionScore)
+                        devRow("Saturation", signal.saturationScore)
+                        devRow("Confidence", signal.confidence * 10)
+                        Divider().background(MalcomePalette.stroke)
+                        Text("Current: \(signal.currentObservationCount) mentions, \(signal.currentSourceCount) sources, \(signal.currentSourceFamilyCount) families")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(MalcomePalette.tertiary)
+                        Text("Historical: \(signal.historicalObservationCount) mentions, \(signal.historicalSourceCount) sources")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(MalcomePalette.tertiary)
+                    }
+                    .padding(.top, 8)
+                }
+                .font(.caption)
+                .foregroundStyle(MalcomePalette.tertiary)
+                .cardStyle()
             }
             .padding(20)
         }
@@ -87,219 +146,97 @@ struct SignalDetailView: View {
         }
     }
 
-    private var movementCard: some View {
-        EmptyView()
-    }
+    // MARK: - Plain Language
 
-    private var overviewCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Quick Read")
-                .sectionTitle()
+    private var plainLanguageSummary: String {
+        let sources = signal.sourceCount
+        let families = signal.currentSourceFamilyCount
 
-            HStack(spacing: 8) {
-                badge(signal.movement.label, color: .blue)
-                badge(signal.maturity.label, color: .indigo)
-                badge(signal.entityType.rawValue.replacingOccurrences(of: "_", with: " ").capitalized, color: .orange)
-            }
+        var parts: [String] = []
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Current read")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(MalcomePalette.secondary)
-                Text("\(signal.currentObservationCount) mention\(signal.currentObservationCount == 1 ? "" : "s") • \(signal.currentSourceCount) source\(signal.currentSourceCount == 1 ? "" : "s") • \(signal.currentSourceFamilyCount) \(signal.currentSourceFamilyCount == 1 ? "family" : "families")")
-                    .font(.caption)
-                    .foregroundStyle(MalcomePalette.secondary)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Stored history")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(MalcomePalette.secondary)
-                Text("\(signal.historicalObservationCount) mention\(signal.historicalObservationCount == 1 ? "" : "s") • \(signal.historicalSourceCount) source\(signal.historicalSourceCount == 1 ? "" : "s")")
-                    .font(.caption)
-                    .foregroundStyle(MalcomePalette.secondary)
-            }
-
-            Text(signal.movementSummary)
-                .foregroundStyle(MalcomePalette.secondary)
-
-            if !signal.supportingSourceIDs.isEmpty {
-                Text("Main sources: \(signal.supportingSourceIDs.map(appModel.sourceName(for:)).joined(separator: ", "))")
-                    .font(.caption)
-                    .foregroundStyle(MalcomePalette.secondary)
-            }
+        switch signal.movement {
+        case .new:
+            parts.append("This is a new appearance on the radar.")
+        case .rising:
+            parts.append("This has been building across multiple sources.")
+        case .stable:
+            parts.append("This has held steady across refreshes.")
+        case .declining:
+            parts.append("This was stronger in previous cycles. The support has thinned out.")
         }
-        .cardStyle()
-    }
 
-    private var statusCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("State of Play")
-                .sectionTitle()
-            statusRow(title: signal.maturity.label, summary: signal.maturitySummary)
-            Divider()
-            statusRow(title: signal.lifecycleState.label, summary: signal.lifecycleSummary)
-            Divider()
-            statusRow(title: signal.conversionState.label, summary: signal.conversionSummary)
+        if families >= 2 {
+            parts.append("Two genuinely different parts of the \(signal.domain.label.lowercased()) scene noticed this independently — that kind of agreement is hard to fake.")
+        } else if sources > 1 {
+            parts.append("Mentioned by \(sources) sources, though still within one source family.")
+        } else {
+            parts.append("Mentioned once in the latest refresh. Still early.")
         }
-        .cardStyle()
+
+        return parts.joined(separator: " ")
     }
 
-    private var investigationCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Investigation Notes")
-                .sectionTitle()
-
-            if !signal.progressionPattern.isEmpty {
-                Text("Progression")
-                    .font(.headline)
-                Text(signal.progressionSummary)
-                    .foregroundStyle(.secondary)
-                Divider()
-            }
-
-            Text("Pathway")
-                .font(.headline)
-            Text(signal.pathwaySummary)
-                .foregroundStyle(.secondary)
-
-            Divider()
-            Text("Source Learning")
-                .font(.headline)
-            Text(signal.sourceInfluenceSummary)
-                .foregroundStyle(.secondary)
+    private var plainMaturity: String {
+        switch signal.maturity {
+        case .earlyEmergence: return "Just starting to appear. Not enough history to say more yet."
+        case .advancing: return "Building consistently over multiple refresh cycles."
+        case .peaking: return "At its strongest visibility right now."
+        case .cooling: return "Was stronger recently. The attention is fading."
+        case .stalled: return "Stopped progressing. The pattern has flattened."
         }
-        .cardStyle()
     }
 
-    private var scoreCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Score Breakdown")
-                .sectionTitle()
-            ScoreRow(label: "Emergence", value: signal.emergenceScore)
-            ScoreRow(label: "Growth", value: signal.growthScore)
-            ScoreRow(label: "Diversity", value: signal.diversityScore)
-            ScoreRow(label: "Repeat", value: signal.repeatAppearanceScore)
-            ScoreRow(label: "Progression", value: signal.progressionScore)
-            ScoreRow(label: "Saturation", value: signal.saturationScore)
-            ScoreRow(label: "Confidence", value: signal.confidence * 10)
+    private var plainLifecycle: String {
+        switch signal.lifecycleState {
+        case .emerging: return "Still emerging. The pattern is forming."
+        case .advancing: return "Moving through the system. Picking up more sources."
+        case .peaked: return "Hit the high point. May still hold or may start to cool."
+        case .cooling: return "Losing sources. The initial momentum has passed."
+        case .failed: return "Did not sustain. The early signal did not convert."
+        case .disappeared: return "No longer showing up in the source network."
         }
-        .cardStyle()
     }
 
-    private var timelineCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Timeline")
-                .sectionTitle()
-
-            if let entityHistory {
-                Text("First seen: \(entityHistory.firstSeenAt.formatted(date: .abbreviated, time: .shortened))")
-                Text("Last seen: \(entityHistory.lastSeenAt.formatted(date: .abbreviated, time: .shortened))")
-                Text("Stored mentions: \(entityHistory.appearanceCount)")
-                Text("Stored source diversity: \(entityHistory.sourceDiversity)")
-            }
-
-            if !runHistory.isEmpty {
-                Divider()
-                ForEach(runHistory.prefix(4)) { run in
-                    HStack {
-                        Text(run.runAt.formatted(date: .abbreviated, time: .shortened))
-                        Spacer()
-                        Text("#\(run.rank)")
-                        Text(run.movement.label)
-                        Text(run.lifecycleState.label)
-                        Text(run.conversionState.label)
-                        Text(run.score.formatted(.number.precision(.fractionLength(1))))
-                            .font(.body.monospacedDigit())
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-            }
+    private var movementColor: Color {
+        switch signal.movement {
+        case .new: return .green
+        case .rising: return .orange
+        case .stable: return .blue
+        case .declining: return .gray
         }
-        .cardStyle()
     }
 
-    private var identityCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Identity Audit")
-                .sectionTitle()
+    // MARK: - Components
 
-            if let canonicalEntity {
-                HStack {
-                    Text(canonicalEntity.displayName)
-                        .font(.headline)
-                    Spacer()
-                    MergeConfidenceBadge(confidence: canonicalEntity.mergeConfidence)
-                }
-
-                Text(canonicalEntity.mergeSummary)
-                    .foregroundStyle(MalcomePalette.secondary)
-
-                if !aliases.isEmpty {
-                    Divider()
-                    Text("Aliases")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.secondary)
-                    Text(aliases.prefix(6).map(\.aliasText).joined(separator: " • "))
-                        .font(.caption)
-                        .foregroundStyle(MalcomePalette.secondary)
-                }
-
-                if !sourceRoles.isEmpty {
-                    Divider()
-                    Text("Role Evidence")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.secondary)
-                    ForEach(sourceRoles.prefix(4)) { role in
-                        HStack(alignment: .top) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(appModel.sourceName(for: role.sourceID))
-                                Text(role.sourceClassification.label)
-                                    .font(.caption)
-                                    .foregroundStyle(MalcomePalette.secondary)
-                            }
-                            Spacer()
-                            Text("\(role.appearanceCount)x")
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(MalcomePalette.secondary)
-                        }
-                    }
-                }
-            } else {
-                Text("Identity details are still loading.")
-                    .foregroundStyle(MalcomePalette.secondary)
-            }
-        }
-        .cardStyle()
-    }
-
-    private func statusRow(title: String, summary: String) -> some View {
+    private func trajectoryRow(label: String, text: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.headline)
-            Text(summary)
+            Text(label)
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(MalcomePalette.secondary)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(MalcomePalette.primary.opacity(0.85))
         }
     }
 
     private func badge(_ title: String, color: Color) -> some View {
         Text(title)
-            .font(.caption.weight(.bold))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(color.opacity(0.14), in: Capsule())
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.15), in: Capsule())
     }
 
-    private func condensed(_ summary: String) -> String {
-        let cleaned = summary.replacingOccurrences(of: "  ", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-        let sentenceBoundaries = [". ", "! ", "? "]
-        if let boundary = sentenceBoundaries.compactMap({ cleaned.range(of: $0) }).map(\.upperBound).min() {
-            return String(cleaned[..<boundary]).trimmingCharacters(in: .whitespacesAndNewlines)
+    private func devRow(_ label: String, _ value: Double) -> some View {
+        HStack {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(MalcomePalette.tertiary)
+            Spacer()
+            Text(value.formatted(.number.precision(.fractionLength(1))))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(MalcomePalette.tertiary)
         }
-        if cleaned.hasSuffix(".") || cleaned.hasSuffix("!") || cleaned.hasSuffix("?") {
-            return cleaned
-        }
-        return cleaned
     }
 }

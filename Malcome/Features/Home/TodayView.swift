@@ -20,19 +20,30 @@ struct TodayView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if let errorMessage = appModel.errorMessage {
-                        ErrorBanner(message: errorMessage)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let errorMessage = appModel.errorMessage {
+                            ErrorBanner(message: errorMessage)
+                        }
+
+                        if appModel.isRefreshing {
+                            loadingState
+                        } else {
+                            threadContent
+                        }
                     }
-
-                    briefContent
-
-                    chatThread
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 80)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 80)
+                .onChange(of: chatMessages.count) {
+                    if let last = chatMessages.last {
+                        withAnimation {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
+                }
             }
             .background(
                 LinearGradient(
@@ -53,84 +64,64 @@ struct TodayView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await appModel.bootstrapIfNeeded()
-            await loadChatMessages()
+            await loadThread()
         }
         .refreshable {
             await appModel.refreshAll()
-            chatMessages = []
+            await loadThread()
         }
     }
 
-    // MARK: - Brief Content
+    // MARK: - Loading State
+
+    private var loadingState: some View {
+        VStack(spacing: 16) {
+            Spacer().frame(height: 80)
+            Text(appModel.loadingMessages.currentMessage)
+                .font(.subheadline.italic())
+                .foregroundStyle(MalcomePalette.secondary)
+                .multilineTextAlignment(.center)
+                .animation(.easeInOut(duration: 0.5), value: appModel.loadingMessages.currentMessage)
+                .frame(maxWidth: .infinity)
+            Spacer().frame(height: 80)
+        }
+    }
+
+    // MARK: - Thread Content (brief + chat as unified conversation)
 
     @ViewBuilder
-    private var briefContent: some View {
-        if appModel.isRefreshing {
-            // Loading state — prominent loading messages
-            VStack(spacing: 16) {
-                Spacer().frame(height: 60)
-                Text(appModel.loadingMessages.currentMessage)
-                    .font(.body.italic())
-                    .foregroundStyle(MalcomePalette.secondary)
-                    .multilineTextAlignment(.center)
-                    .animation(.easeInOut(duration: 0.5), value: appModel.loadingMessages.currentMessage)
-                    .frame(maxWidth: .infinity)
-                Spacer().frame(height: 60)
-            }
-        } else if let brief = appModel.brief {
-            VStack(alignment: .leading, spacing: 12) {
-                // Quiet timestamp
-                Text(briefTimestamp(brief))
-                    .font(.caption2)
-                    .foregroundStyle(MalcomePalette.tertiary)
-
-                // Brief title
-                Text(brief.title)
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(MalcomePalette.primary)
-
-                // Brief body with citations
-                CitedBriefText(text: brief.body, citations: brief.citationsPayload)
-            }
-        } else {
+    private var threadContent: some View {
+        if chatMessages.isEmpty, appModel.brief == nil {
             VStack(spacing: 12) {
                 Spacer().frame(height: 40)
                 Text("Pull down to refresh")
-                    .font(.body)
+                    .font(.subheadline)
                     .foregroundStyle(MalcomePalette.secondary)
                 Spacer().frame(height: 40)
             }
             .frame(maxWidth: .infinity)
-        }
-    }
-
-    // MARK: - Chat Thread
-
-    @ViewBuilder
-    private var chatThread: some View {
-        if !chatMessages.isEmpty || isMalcomeThinking {
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(chatMessages, id: \.id) { message in
-                    chatBubble(message)
-                }
-
-                if isMalcomeThinking {
-                    HStack(spacing: 6) {
-                        Text(thinkingMessage)
-                            .font(.caption)
-                            .foregroundStyle(MalcomePalette.tertiary)
-                            .italic()
-                    }
-                    .padding(.leading, 4)
-                }
+        } else {
+            ForEach(chatMessages, id: \.id) { message in
+                threadMessage(message)
+                    .id(message.id)
             }
-            .padding(.top, 8)
+
+            if isMalcomeThinking {
+                HStack(spacing: 6) {
+                    Text(thinkingMessage)
+                        .font(.caption)
+                        .foregroundStyle(MalcomePalette.tertiary)
+                        .italic()
+                }
+                .padding(.leading, 4)
+            }
         }
     }
 
     @ViewBuilder
-    private func chatBubble(_ message: ChatMessageRecord) -> some View {
+    private func threadMessage(_ message: ChatMessageRecord) -> some View {
         if message.role == "user" {
+            // User message — right-aligned bubble
             HStack {
                 Spacer()
                 Text(message.content)
@@ -141,7 +132,22 @@ struct TodayView: View {
                     .background(Color.orange.opacity(0.8))
                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
+        } else if message.turnNumber == 0, let brief = appModel.brief {
+            // Brief message — first in thread, rendered with citations
+            VStack(alignment: .leading, spacing: 10) {
+                Text(briefTimestamp(brief))
+                    .font(.caption2)
+                    .foregroundStyle(MalcomePalette.tertiary)
+
+                Text(brief.title)
+                    .font(.headline.weight(.bold))
+                    .foregroundStyle(MalcomePalette.primary)
+
+                CitedBriefText(text: brief.body, citations: brief.citationsPayload)
+            }
+            .padding(.bottom, 4)
         } else {
+            // Malcome chat response — left-aligned
             Text(message.content)
                 .font(.subheadline)
                 .foregroundStyle(MalcomePalette.primary.opacity(0.9))
@@ -195,14 +201,14 @@ struct TodayView: View {
         isMalcomeThinking = true
         thinkingMessage = Self.thinkingMessages.randomElement() ?? "One moment."
 
-        // Add user message to display immediately
+        let userTurnCount = chatMessages.filter({ $0.role == "user" }).count
         let userMessage = ChatMessageRecord(
             id: UUID().uuidString,
             briefID: brief.id,
             role: "user",
             content: message,
             timestamp: .now,
-            turnNumber: chatMessages.filter({ $0.role == "user" }).count + 1
+            turnNumber: userTurnCount + 1
         )
         chatMessages.append(userMessage)
 
@@ -231,10 +237,28 @@ struct TodayView: View {
         isMalcomeThinking = false
     }
 
-    private func loadChatMessages() async {
-        guard let brief = appModel.brief else { return }
-        let messages = (try? await appModel.container.repository.fetchChatMessages(briefID: brief.id)) ?? []
-        chatMessages = messages
+    private func loadThread() async {
+        guard let brief = appModel.brief else {
+            chatMessages = []
+            return
+        }
+
+        // Store brief as first message if not already present
+        let existingMessages = (try? await appModel.container.repository.fetchChatMessages(briefID: brief.id)) ?? []
+        let hasBriefMessage = existingMessages.contains { $0.turnNumber == 0 && $0.role == "malcome" }
+
+        if !hasBriefMessage {
+            try? await appModel.container.repository.storeChatMessage(
+                id: UUID().uuidString,
+                briefID: brief.id,
+                role: "malcome",
+                content: brief.body,
+                timestamp: brief.generatedAt,
+                turnNumber: 0
+            )
+        }
+
+        chatMessages = (try? await appModel.container.repository.fetchChatMessages(briefID: brief.id)) ?? []
     }
 
     private func briefTimestamp(_ brief: BriefRecord) -> String {

@@ -36,6 +36,23 @@ struct SettingsView: View {
                 }
             }
 
+            Section("How Malcome Works") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("I watch a curated network of sources — the kinds of places that tend to notice things early. Record shops, not Billboard. College radio, not Spotify charts. The publications, platforms, and venues where cultural movement shows up before mainstream consensus forms.")
+                        .font(.caption)
+                        .foregroundStyle(MalcomePalette.secondary)
+
+                    Text("When I see the same name surface across genuinely independent sources — sources that are not talking to each other — I treat that as a signal. One source noticing something is a curiosity. Two independent sources arriving at the same conclusion is a pattern worth paying attention to.")
+                        .font(.caption)
+                        .foregroundStyle(MalcomePalette.secondary)
+
+                    Text("The watchlist is where names sit before they become signals. They have appeared somewhere interesting, but they have not crossed the corroboration line yet. I keep them visible because the best time to know a name is before everyone else figures it out.")
+                        .font(.caption)
+                        .foregroundStyle(MalcomePalette.secondary)
+                }
+                .padding(.vertical, 4)
+            }
+
             Section("About") {
                 HStack {
                     Text("Last refresh")

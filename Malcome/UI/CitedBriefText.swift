@@ -12,7 +12,7 @@ struct CitedBriefText: View {
         VStack(alignment: .leading, spacing: 12) {
             // Brief body with inline citation markers
             buildInlineText()
-                .font(.body)
+                .font(.subheadline)
                 .foregroundStyle(MalcomePalette.primary.opacity(0.9))
 
             // Tappable citation chips
