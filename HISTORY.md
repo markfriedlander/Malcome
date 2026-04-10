@@ -281,3 +281,25 @@ The product, requirements, decisions, and candidate docs were updated so future 
 The source doctrine is now visible inside the product and harness instead of living only in markdown.
 Each source can now explain why it is early, why it is selective, and what corroboration role it is supposed to play.
 That gives Malcome a real source-audit layer, which makes future source expansion easier to inspect and harder to drift.
+
+## Phase 45
+
+Malcome gained a voice and personality layer, a chat foundation, and developer iteration infrastructure.
+MalcomeBriefGenerator replaced LocalBriefGenerator in the production brief path using a DraftComposer architecture: deterministic Swift templates write Malcome-voiced prose from structured signal data, with Apple Foundation Models providing a light polish pass.
+This architecture was discovered through 13 iterations against on-device AFM via a new MalcomeAPIServer local HTTP API, which confirmed that the on-device model cannot sustain original character voice from scratch but excels at smoothing pre-composed drafts and generating grounded conversational responses.
+BriefingInput was enriched with watchlist candidates, domain mix, and source influence highlights so the generator has everything it needs without reaching back into the repository.
+DraftComposer templates are domain-agnostic in structure and domain-aware in language, interpolating domain from signal data rather than hardcoding any domain name.
+Templates handle lead signals, secondary signals with movement-aware framing, signal-to-watchlist transitions, watchlist paragraphs with stage-aware language, watchlist-only briefs, declining movement, thin-data expansion, and empty state.
+Inline citation markers appear at the point where sources are mentioned in the brief prose, with each source getting its own numbered reference.
+A citation preview card renders when tapped, showing source name, observation title, excerpt, and stream deep links to Apple Music, Bandcamp, and YouTube constructed from the entity name.
+ChatEngine scaffolding was built with a chat_messages table, context assembly from the current brief and signal data, and a grounded pre-composer that drafts responses from actual evidence before AFM smooths them into conversation.
+The chat pre-composer ensures zero hallucination by only referencing data present in the signal context, with honest no-match responses when an entity is not in the source network.
+ExcerptDistiller was added to run a small AFM call at ingest time, extracting the single most informative entity-specific sentence from observation excerpts and storing it as a distilledExcerpt field.
+Excerpt cleaning was improved to strip caption headers, find natural sentence boundaries, reject generic editorial observations, and prefer entity-specific sentences.
+The Bandcamp Daily RSS parser was fixed to prefer dc:creator for entity resolution instead of full title credit strings, and a credit-string splitting heuristic was added to extract lead artist names from multi-artist credit formats.
+RENORMALIZE_OBSERVATIONS and RESET_IDENTITY_GRAPH commands were built as developer tools that re-apply current parser normalization to stored observations and surgically reset the identity resolution layer.
+Dev politeness mode compresses source refresh cadence to a 2-minute floor while always respecting published rate limits.
+MalcomeAPIServer exposes endpoints for brief generation, chat, pipeline inspection, command execution, and state queries on port 8766 with keychain-backed authentication.
+A pool of 73 domain-aware loading messages rotates during brief generation, weighted toward active source domains.
+TokenEstimator provides character-based heuristic estimation at 3.5 characters per token with sentence-boundary truncation.
+Article body ingestion was documented as a planned capability in DECISIONS.md, with the distilledExcerpt field as the first step toward that architecture.

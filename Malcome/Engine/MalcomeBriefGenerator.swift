@@ -159,9 +159,8 @@ enum DraftComposer {
         mutating func cite(sourceName: String, observation: ObservationRecord?) -> String {
             let url = observation?.url ?? ""
             if !url.isEmpty, seenURLs.contains(url) {
-                // Already cited — find existing index
                 if let idx = references.firstIndex(where: { $0.url == url }) {
-                    return " [\(idx + 1)]"
+                    return "[\(idx + 1)]"
                 }
             }
             let ref = DraftResult.SourceReference(
@@ -172,7 +171,7 @@ enum DraftComposer {
             )
             references.append(ref)
             if !url.isEmpty { seenURLs.insert(url) }
-            return " [\(references.count)]"
+            return "[\(references.count)]"
         }
     }
 
