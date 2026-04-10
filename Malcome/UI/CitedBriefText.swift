@@ -2,8 +2,7 @@ import SwiftUI
 
 // MARK: - Cited Brief Text
 
-/// Renders brief body text with tappable citation markers [1], [2] etc.
-/// Tapping a marker shows a preview card with source details and stream links.
+/// Renders brief body text with inline citation markers and tappable citation chips below.
 struct CitedBriefText: View {
     let text: String
     let citations: [BriefCitation]
@@ -11,79 +10,66 @@ struct CitedBriefText: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            buildAttributedText()
+            // Brief body with inline citation markers
+            buildInlineText()
                 .font(.body)
                 .foregroundStyle(MalcomePalette.primary.opacity(0.9))
 
+            // Tappable citation chips
+            if !citations.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(Array(citations.enumerated()), id: \.element.id) { index, citation in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                if selectedCitation?.id == citation.id {
+                                    selectedCitation = nil
+                                } else {
+                                    selectedCitation = citation
+                                }
+                            }
+                        } label: {
+                            Text("[\(index + 1)] \(citation.sourceName)")
+                                .font(.caption2)
+                                .foregroundStyle(selectedCitation?.id == citation.id ? .white : Color.orange)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(selectedCitation?.id == citation.id ? Color.orange.opacity(0.8) : Color.orange.opacity(0.12))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            // Preview card for selected citation
             if let citation = selectedCitation {
                 CitationPreviewCard(citation: citation) {
-                    withAnimation { selectedCitation = nil }
+                    withAnimation(.easeInOut(duration: 0.2)) { selectedCitation = nil }
                 }
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: selectedCitation?.id)
+        .animation(.easeInOut(duration: 0.2), value: selectedCitation?.id)
     }
 
-    @ViewBuilder
-    private func buildAttributedText() -> some View {
+    private func buildInlineText() -> Text {
         let segments = parseCitationSegments(text)
-        // Use Text concatenation for inline rendering
-        segments.reduce(Text("")) { result, segment in
+        return segments.reduce(Text("")) { result, segment in
             switch segment {
             case .plain(let str):
                 return result + Text(str)
             case .citation(let index):
-                if index > 0, index <= citations.count {
-                    return result + Text(" [\(index)]")
-                        .font(.caption)
-                        .foregroundStyle(Color.orange)
-                        .baselineOffset(4)
-                } else {
-                    return result + Text(" [\(index)]")
-                        .font(.caption)
-                        .foregroundStyle(MalcomePalette.secondary)
-                        .baselineOffset(4)
-                }
+                return result + Text("[\(index)]")
+                    .font(.caption)
+                    .foregroundStyle(Color.orange)
+                    .baselineOffset(4)
             }
         }
-        .onTapGesture { location in
-            // Text tap handling — find which citation was tapped
-            // SwiftUI doesn't provide per-range tap, so we cycle through citations
-            // For now, show first citation on any tap within a citation area
-        }
-        .overlay(citationTapTargets())
     }
 
-    @ViewBuilder
-    private func citationTapTargets() -> some View {
-        // Overlay invisible buttons for each citation marker
-        // This is a workaround since Text concatenation doesn't support per-segment tap
-        HStack(spacing: 0) {
-            ForEach(Array(citations.enumerated()), id: \.element.id) { index, citation in
-                Button {
-                    withAnimation {
-                        if selectedCitation?.id == citation.id {
-                            selectedCitation = nil
-                        } else {
-                            selectedCitation = citation
-                        }
-                    }
-                } label: {
-                    Text("[\(index + 1)]")
-                        .font(.caption)
-                        .foregroundStyle(Color.orange)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .padding(.top, 4)
-    }
-
-    // MARK: - Citation Parsing
+    // MARK: - Parsing
 
     private enum TextSegment {
         case plain(String)
@@ -95,13 +81,11 @@ struct CitedBriefText: View {
         var remaining = text[text.startIndex...]
 
         while let bracketStart = remaining.range(of: "[") {
-            // Add plain text before the bracket
             let before = String(remaining[remaining.startIndex..<bracketStart.lowerBound])
             if !before.isEmpty {
                 segments.append(.plain(before))
             }
 
-            // Try to find matching close bracket with a number inside
             let afterBracket = remaining[bracketStart.upperBound...]
             if let bracketEnd = afterBracket.range(of: "]") {
                 let inside = String(afterBracket[afterBracket.startIndex..<bracketEnd.lowerBound])
@@ -112,12 +96,10 @@ struct CitedBriefText: View {
                 }
             }
 
-            // Not a citation marker — treat as plain text
             segments.append(.plain("["))
             remaining = remaining[bracketStart.upperBound...]
         }
 
-        // Add any remaining plain text
         let rest = String(remaining)
         if !rest.isEmpty {
             segments.append(.plain(rest))
@@ -173,24 +155,11 @@ struct CitationPreviewCard: View {
                     }
                 }
 
-                // Stream links — construct search deep links from entity name
-                let entityName = extractEntityName(from: citation)
+                let entityName = citation.signalName.isEmpty || citation.signalName == "watchlist" ? "" : citation.signalName
                 if !entityName.isEmpty {
-                    streamLink(
-                        name: "Apple Music",
-                        icon: "music.note",
-                        url: appleMusicSearchURL(entityName)
-                    )
-                    streamLink(
-                        name: "Bandcamp",
-                        icon: "waveform",
-                        url: bandcampSearchURL(entityName)
-                    )
-                    streamLink(
-                        name: "YouTube",
-                        icon: "play.rectangle",
-                        url: youtubeSearchURL(entityName)
-                    )
+                    streamLink(icon: "music.note", url: searchURL("https://music.apple.com/search?term=", query: entityName))
+                    streamLink(icon: "waveform", url: searchURL("https://bandcamp.com/search?q=", query: entityName))
+                    streamLink(icon: "play.rectangle", url: searchURL("https://www.youtube.com/results?search_query=", query: entityName))
                 }
             }
         }
@@ -206,7 +175,7 @@ struct CitationPreviewCard: View {
     }
 
     @ViewBuilder
-    private func streamLink(name: String, icon: String, url: URL?) -> some View {
+    private func streamLink(icon: String, url: URL?) -> some View {
         if let url {
             Link(destination: url) {
                 Image(systemName: icon)
@@ -216,26 +185,8 @@ struct CitationPreviewCard: View {
         }
     }
 
-    private func extractEntityName(from citation: BriefCitation) -> String {
-        // Use signalName if available, otherwise try to extract from observation title
-        if !citation.signalName.isEmpty && citation.signalName != "watchlist" {
-            return citation.signalName
-        }
-        return ""
-    }
-
-    private func appleMusicSearchURL(_ query: String) -> URL? {
+    private func searchURL(_ base: String, query: String) -> URL? {
         let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-        return URL(string: "https://music.apple.com/search?term=\(encoded)")
-    }
-
-    private func bandcampSearchURL(_ query: String) -> URL? {
-        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-        return URL(string: "https://bandcamp.com/search?q=\(encoded)")
-    }
-
-    private func youtubeSearchURL(_ query: String) -> URL? {
-        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-        return URL(string: "https://www.youtube.com/results?search_query=\(encoded)")
+        return URL(string: base + encoded)
     }
 }

@@ -425,6 +425,14 @@ The brief variant is a minimal polish instruction (approximately 100 tokens) tha
 The chat variant is a full character prompt (approximately 400 tokens) that establishes Malcome's voice for original conversational responses. This is where AFM does its real generative work — responding to unpredictable follow-up questions in character with pinned signal context.
 Both variants are collaborative artifacts reviewed before they ship.
 
+Navigation and screens:
+
+Three tabs: Today, Radar, Settings.
+Today is the product screen. It shows only the brief and the chat input. Pull-to-refresh for manual refresh, auto-refresh on launch. Brief generation time as a quiet single line, not a prominent card. Loading messages rotate prominently while composeBrief runs. Chat input sits below the brief with a thinking state indicator while AFM responds.
+Radar is for users who want to go deeper. Signal and watchlist cards, one per entity, scannable. Abbreviated stat labels that never wrap.
+Settings contains source management with doctrine profiles collapsed behind disclosure chevrons and future domain preference toggles.
+Identity audit is a developer tool accessible only through the developer API or a hidden gesture, not in primary navigation.
+
 Developer iteration infrastructure:
 
 MalcomeAPIServer is a local HTTP API on port 8766 adapted from Hal's LocalAPIServer.

@@ -4,24 +4,24 @@ struct RootView: View {
     var body: some View {
         TabView {
             NavigationStack {
-                HomeView()
+                TodayView()
             }
             .tabItem {
-                Label("Today", systemImage: "sparkles.rectangle.stack")
+                Label("Today", systemImage: "text.quote")
             }
 
             NavigationStack {
-                IdentityReviewView()
+                RadarView()
             }
             .tabItem {
-                Label("Identity", systemImage: "person.text.rectangle")
+                Label("Radar", systemImage: "dot.radiowaves.left.and.right")
             }
 
             NavigationStack {
-                SourcesView()
+                SettingsView()
             }
             .tabItem {
-                Label("Sources", systemImage: "dot.radiowaves.left.and.right")
+                Label("Settings", systemImage: "gearshape")
             }
         }
         .tint(.orange)

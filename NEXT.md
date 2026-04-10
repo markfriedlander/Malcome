@@ -1,6 +1,13 @@
 # Current Priorities
 
-1 Build the voice and personality layer.
+1 Ship the product UI.
+The Today screen shows only the brief and the chat input. Everything else moves to Radar or Settings.
+Navigation is three tabs: Today (brief and chat), Radar (signals and watchlist for deeper exploration), Settings (sources, preferences, future domain toggles).
+Identity audit disappears from primary navigation entirely — developer tool only.
+Pull-to-refresh and auto-refresh on launch replace the big header card.
+Loading messages rotate prominently during brief generation and chat thinking states show short calm pauses.
+Inline citations with preview cards and stream links are the beginning of the exploration layer.
+2 Build the voice and personality layer.
 MalcomeBriefGenerator replaces LocalBriefGenerator as the production brief path using Apple Foundation Models on-device only.
 Both signal briefs and watchlist briefs route through MalcomeBriefGenerator so the voice is consistent regardless of signal state.
 BriefingInput is enriched with watchlist candidates, domain mix, and source influence highlights so the generator has everything it needs without reaching back into the repository.
@@ -12,8 +19,8 @@ Conversation history older than the last few exchanges is compressed using a two
 Chat history resets with each new brief cycle.
 If Apple Foundation Models is unavailable on the device, Malcome surfaces a clear message and stops. No silent fallback.
 The voice prompt is a collaborative artifact reviewed before it ships.
-2 Keep threading predictive source and source-family influence into user-facing reads so Malcome's learned trust remains legible outside the harness without turning the product into an analytics dashboard.
-3 Continue controlled expansion across domains and cities, adding only a small number of high-signal sources that fit the production pipeline cleanly and strengthen cross-domain corroboration rather than just source count.
+3 Keep threading predictive source and source-family influence into user-facing reads so Malcome's learned trust remains legible outside the harness without turning the product into an analytics dashboard.
+4 Continue controlled expansion across domains and cities, adding only a small number of high-signal sources that fit the production pipeline cleanly and strengthen cross-domain corroboration rather than just source count.
 Keep source choice anchored to the source doctrine: upstream tastemakers, scene infrastructure, creator platforms, niche publications, communities, and marketplaces over general commentary.
 Next likely lanes: more creator-platform, marketplace, and tastemaker sources that materially diversify the current music/art/fashion-heavy mix without duplicating an existing source family.
 Near-term emphasis: broaden beyond editorial-only growth by adding creator-platform, community, or marketplace lanes that can corroborate the new cross-city tastemaker coverage.
@@ -21,16 +28,16 @@ Keep creator-platform additions curated: staff picks, featured selections, and t
 Raise corroboration quality inside the broadened network so added sources create cross-family confirmation instead of just more single-lane observations.
 Prefer additions that can plausibly cross with existing lanes already in the network, especially film, design, community, and marketplace sources that could confirm names surfacing in music, art, or fashion tastemaker paths.
 Use the new in-product doctrine profile as part of source review whenever adding, keeping, or retiring a source.
-4 Keep tightening editorial and community subject extraction so Malcome follows reusable cultural entities instead of recurring publication-owned series, roundups, and source-branded programs.
-5 Tune source-specific politeness controls so cadence and backoff windows stay respectful without making Malcome feel over-paused.
-6 Expand the device smoke harness from runtime verification into a small set of repeatable product-health assertions against a connected iPhone.
-7 Tune conversion detection quality so downstream outcomes are strict enough to be meaningful but broad enough to accumulate evidence.
-8 Resolve every live unfinished source path explicitly: complete it, disable it, or document its honest failure reason and next step.
-9 Surface source-family context more clearly in the harness and review surfaces so future discovery-engine work can audit independence assumptions directly.
-10 Design a typed exploration layer so high-confidence entities can link users outward to the source, the work itself, and trusted context destinations without forcing a generic search workflow.
-11 Extend the new current-vs-history evidence split into more brief and investigation surfaces so historical repetition never reads like live corroboration.
-12 Keep the outbound-link affordance consistent anywhere tapping leaves Malcome, including future exploration surfaces.
-13 Validate the new derived event-instance identity on-device after a fresh refresh, then decide whether the next step should be a dedicated event table or whether the derived key is sufficient for cross-source event matching in v1.
+5 Keep tightening editorial and community subject extraction so Malcome follows reusable cultural entities instead of recurring publication-owned series, roundups, and source-branded programs.
+6 Tune source-specific politeness controls so cadence and backoff windows stay respectful without making Malcome feel over-paused.
+7 Expand the device smoke harness from runtime verification into a small set of repeatable product-health assertions against a connected iPhone.
+8 Tune conversion detection quality so downstream outcomes are strict enough to be meaningful but broad enough to accumulate evidence.
+9 Resolve every live unfinished source path explicitly: complete it, disable it, or document its honest failure reason and next step.
+10 Surface source-family context more clearly in the harness and review surfaces so future discovery-engine work can audit independence assumptions directly.
+11 Design a typed exploration layer so high-confidence entities can link users outward to the source, the work itself, and trusted context destinations without forcing a generic search workflow.
+12 Extend the new current-vs-history evidence split into more brief and investigation surfaces so historical repetition never reads like live corroboration.
+13 Keep the outbound-link affordance consistent anywhere tapping leaves Malcome, including future exploration surfaces.
+14 Validate the new derived event-instance identity on-device after a fresh refresh, then decide whether the next step should be a dedicated event table or whether the derived key is sufficient for cross-source event matching in v1.
 
 ## Do not expand source count broadly yet.
 
