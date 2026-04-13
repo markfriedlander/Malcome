@@ -511,6 +511,14 @@ Citations should be deduplicated by source URL across the entire brief. Each uni
 Reason:
 [2] Bandcamp Daily and [4] Bandcamp Daily appearing in the same brief is confusing. A unified citation index makes the brief cleaner and the citation chips more useful.
 
+## Brief title is the lead entity name only
+
+Decision:
+The brief title is the lead signal's canonical entity name. Nothing else. No AFM-generated titles, no template suffixes, no descriptive phrases. "Thundercat." If there's no signal, no title — the empty state handles it.
+
+Reason:
+AFM-generated titles produced generic phrases ("Sonic Renaissance", "Consistently Makes Music", "Continues to Perform") that undermine Malcome's voice. The entity name is specific, clean, and immediately tells the user what the brief is about. Malcome's confidence is in the content, not the headline.
+
 ## Context-aware empty state messages
 
 Decision:

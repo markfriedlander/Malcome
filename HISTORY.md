@@ -334,3 +334,19 @@ Three-tier Wikipedia context injection was built: brief gets a ~15 word descript
 Pronoun resolution in chat connects follow-up questions like "his discography" to the last-mentioned entity from conversation history.
 Multi-entity extraction and cold start seed database were documented as architectural decisions.
 Domain-specific context fallbacks (MusicBrainz, Artsy, TMDB) were documented as planned capabilities.
+
+## Phase 48
+
+The observation window policy was changed from 3-day/10-day to 14-day/60-day/90-day to reflect weekly and biweekly user cadence.
+A two-tier signal architecture was added: current tier for 14-day cross-family corroboration and historical tier for 90-day pattern intelligence, each with distinct language in the brief.
+The RELINK_OBSERVATIONS command was built to re-resolve all stored observations into canonical entities, fixing the 72% unlinked observation gap from the April 10 identity reset.
+The observation limit in refreshAll was removed so the signal engine always sees the complete dataset.
+With relinking, 12 signals surfaced from genuine cross-family corroboration including Thundercat, Damaged Bug, and Kim Gordon.
+Eight brief quality fixes were applied: Bandcamp metadata filtering, recurring series tagger expansion, distillation prompt tightening, template phrase variation, citation deduplication by source name, Wikipedia summarizer hard cap, loading animation with opacity shimmer, and context-aware empty state messages at three levels.
+Force refresh was built with politeness bypass for both the UI pull-to-refresh and the Settings refresh button.
+Minimum 15-second loading duration ensures the loading experience shows at least three message rotations.
+Brief title generation was simplified to the lead entity name only, removing AFM-generated titles.
+RETAG_OBSERVATIONS command re-runs the editorial content tagger on all stored observations.
+Tab navigation with selection binding enables automatic navigation to Today after a Settings refresh.
+TESTING.md was created documenting the three-harness testing philosophy.
+Synthetic data initiative was added to NEXT.md as the next major planned work.

@@ -38,7 +38,7 @@ struct MalcomeBriefGenerator: BriefGenerating {
         let body = draftResult.sourceReferences.isEmpty
             ? draftResult.text
             : await polishWithAFM(draftResult.text)
-        let title = await briefTitle(from: capped, briefBody: body)
+        let title = briefTitle(from: capped, briefBody: body)
 
         let citations = draftResult.sourceReferences.enumerated().map { index, ref in
             BriefCitation(
@@ -110,55 +110,14 @@ struct MalcomeBriefGenerator: BriefGenerating {
 
     // MARK: - Title
 
-    private func briefTitle(from input: BriefingInput, briefBody: String) async -> String {
+    private func briefTitle(from input: BriefingInput, briefBody: String) -> String {
         if let lead = input.signals.first {
-            if let afmTitle = await generateTitle(leadName: lead.signal.canonicalName, movement: lead.signal.movement, domain: lead.signal.domain) {
-                return afmTitle
-            }
-            return templateTitle(leadName: lead.signal.canonicalName, movement: lead.signal.movement)
+            return lead.signal.canonicalName
         }
         if let lead = input.watchlistCandidates.first {
-            return "Watching \(lead.title)"
+            return lead.title
         }
-        return "Malcome Radar"
-    }
-
-    private func generateTitle(leadName: String, movement: SignalMovement, domain: CulturalDomain) async -> String? {
-        guard SystemLanguageModel.default.isAvailable else { return nil }
-
-        let movementHint: String
-        switch movement {
-        case .new: movementHint = "just appeared on the radar"
-        case .rising: movementHint = "is building momentum"
-        case .stable: movementHint = "keeps showing up consistently"
-        case .declining: movementHint = "is losing momentum"
-        }
-
-        let prompt = "Write a title for a cultural brief. Maximum 6 words. Calm and specific. No adjectives like 'sonic', 'remarkable', 'cultural'. No words like 'phenomenon', 'renaissance', 'unfolds', 'journey', 'explores'. Just say what is happening. Example: 'Thundercat Is Moving Again'. Subject: \(leadName) \(movementHint) in \(domain.label.lowercased()). Title:"
-
-        do {
-            let session = LanguageModelSession()
-            let response = try await session.respond(to: prompt)
-            let title = response.content
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .replacingOccurrences(of: "\"", with: "")
-                .replacingOccurrences(of: "\n", with: " ")
-            let wordCount = title.split(separator: " ").count
-            if title.count >= 5 && title.count <= 60 && wordCount <= 8 {
-                return title
-            }
-        } catch {}
-
-        return nil
-    }
-
-    private func templateTitle(leadName: String, movement: SignalMovement) -> String {
-        switch movement {
-        case .new: return "\(leadName) Just Showed Up"
-        case .rising: return "\(leadName) Is Building"
-        case .stable: return "The Scene Keeps Noticing \(leadName)"
-        case .declining: return "\(leadName) Is Cooling"
-        }
+        return ""
     }
 
     // Citations are now built from DraftResult.sourceReferences in generateBrief()
@@ -209,31 +168,21 @@ enum DraftComposer {
 
     private struct SourceTracker {
         private(set) var references: [DraftResult.SourceReference] = []
-        private var seenURLs: Set<String> = []
-        private var seenSourceNames: [String: Int] = [:]  // sourceName → citation index
+        private var seenSourceNames: [String: Int] = [:]
 
         mutating func cite(sourceName: String, observation: ObservationRecord?) -> String {
-            // Deduplicate by source name across the full brief
+            // Each unique source name gets exactly one citation number
             if let existingIndex = seenSourceNames[sourceName] {
                 return "[\(existingIndex)]"
-            }
-
-            let url = observation?.url ?? ""
-            if !url.isEmpty, seenURLs.contains(url) {
-                if let idx = references.firstIndex(where: { $0.url == url }) {
-                    seenSourceNames[sourceName] = idx + 1
-                    return "[\(idx + 1)]"
-                }
             }
 
             let ref = DraftResult.SourceReference(
                 sourceName: sourceName,
                 observationTitle: observation?.title ?? "",
-                url: url,
+                url: observation?.url ?? "",
                 excerpt: observation?.distilledExcerpt ?? observation?.excerpt ?? ""
             )
             references.append(ref)
-            if !url.isEmpty { seenURLs.insert(url) }
             let index = references.count
             seenSourceNames[sourceName] = index
             return "[\(index)]"

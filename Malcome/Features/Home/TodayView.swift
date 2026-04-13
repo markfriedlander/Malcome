@@ -101,32 +101,47 @@ struct TodayView: View {
 
     // MARK: - Loading State
 
-    @State private var shimmerOpacity: Double = 0.7
+    @State private var loadingOpacity: Double = 0
+    @State private var displayedMessage: String = ""
 
     private var loadingState: some View {
         VStack(spacing: 16) {
             Spacer().frame(height: 80)
-            if !appModel.loadingMessages.currentMessage.isEmpty {
-                Text(appModel.loadingMessages.currentMessage)
-                    .font(.subheadline.italic())
-                    .foregroundStyle(MalcomePalette.secondary)
-                    .opacity(shimmerOpacity)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-                    .id(appModel.loadingMessages.currentMessage)
-                    .transition(.asymmetric(
-                        insertion: .opacity.animation(.easeIn(duration: 0.5)),
-                        removal: .opacity.animation(.easeOut(duration: 0.5))
-                    ))
-                    .onAppear {
-                        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                            shimmerOpacity = 1.0
-                        }
-                    }
-            }
+            Text(displayedMessage)
+                .font(.subheadline.italic())
+                .foregroundStyle(MalcomePalette.secondary)
+                .opacity(loadingOpacity)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, minHeight: 40)
             Spacer().frame(height: 80)
         }
-        .animation(.easeInOut(duration: 0.5), value: appModel.loadingMessages.currentMessage)
+        .onAppear { startLoadingAnimation() }
+        .onDisappear { loadingOpacity = 0 }
+        .onChange(of: appModel.loadingMessages.currentMessage) {
+            // When the message provider rotates, trigger a fade cycle
+            Task { await fadeToNextMessage(appModel.loadingMessages.currentMessage) }
+        }
+    }
+
+    private func startLoadingAnimation() {
+        displayedMessage = appModel.loadingMessages.currentMessage
+        withAnimation(.easeIn(duration: 0.4)) {
+            loadingOpacity = 1.0
+        }
+    }
+
+    private func fadeToNextMessage(_ newMessage: String) async {
+        // Fade out
+        withAnimation(.easeOut(duration: 0.4)) {
+            loadingOpacity = 0
+        }
+        try? await Task.sleep(for: .milliseconds(500))
+        // Swap text while invisible
+        displayedMessage = newMessage
+        // Fade in
+        withAnimation(.easeIn(duration: 0.4)) {
+            loadingOpacity = 1.0
+        }
     }
 
     // MARK: - Thread Content (brief + chat as unified conversation)

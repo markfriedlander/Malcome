@@ -55,7 +55,10 @@ struct SettingsView: View {
 
             Section {
                 Button {
-                    Task { await appModel.forceRefresh() }
+                    Task {
+                        appModel.selectedTab = 0  // Navigate to Today immediately
+                        await appModel.forceRefresh()
+                    }
                 } label: {
                     HStack {
                         Text("Refresh now")

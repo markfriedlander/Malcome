@@ -1,14 +1,17 @@
 import SwiftUI
 
 struct RootView: View {
+    @EnvironmentObject private var appModel: AppViewModel
+
     var body: some View {
-        TabView {
+        TabView(selection: $appModel.selectedTab) {
             NavigationStack {
                 TodayView()
             }
             .tabItem {
                 Label("Today", systemImage: "text.quote")
             }
+            .tag(0)
 
             NavigationStack {
                 RadarView()
@@ -16,6 +19,7 @@ struct RootView: View {
             .tabItem {
                 Label("Radar", systemImage: "dot.radiowaves.left.and.right")
             }
+            .tag(1)
 
             NavigationStack {
                 SettingsView()
@@ -23,6 +27,7 @@ struct RootView: View {
             .tabItem {
                 Label("Settings", systemImage: "gearshape")
             }
+            .tag(2)
         }
         .tint(.orange)
         .preferredColorScheme(.dark)

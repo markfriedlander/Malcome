@@ -16,6 +16,7 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var refreshWarning: String?
     @Published var errorMessage: String?
     @Published private(set) var isFirstLaunch = false
+    @Published var selectedTab: Int = 0  // 0=Today, 1=Radar, 2=Settings
 
     let container: AppContainer
     let loadingMessages = LoadingMessageProvider()
@@ -68,7 +69,7 @@ final class AppViewModel: ObservableObject {
 
     private static let minimumLoadingDuration: TimeInterval = 15
 
-    func refreshAll() async {
+    func refreshAll(bypassPoliteness: Bool = false) async {
         guard !isRefreshing else { return }
         isRefreshing = true
         errorMessage = nil
@@ -76,6 +77,12 @@ final class AppViewModel: ObservableObject {
         let activeDomains = Set(sourceStatuses.filter(\.source.enabled).map(\.source.domain))
         loadingMessages.start(activeDomains: activeDomains)
         let loadingStartedAt = Date()
+
+        // Set bypass before any async work so the pipeline sees it
+        let previousFloor = SourcePipeline.devCadenceFloorSeconds
+        if bypassPoliteness {
+            SourcePipeline.devCadenceFloorSeconds = 1
+        }
 
         do {
             try await container.repository.seedSourcesIfNeeded(container.sourceRegistry.initialSeeds())
@@ -122,6 +129,11 @@ final class AppViewModel: ObservableObject {
             errorMessage = error.localizedDescription
         }
 
+        // Restore politeness after refresh
+        if bypassPoliteness {
+            SourcePipeline.devCadenceFloorSeconds = previousFloor
+        }
+
         // Minimum loading duration so the experience feels alive
         let elapsed = Date().timeIntervalSince(loadingStartedAt)
         if elapsed < Self.minimumLoadingDuration {
@@ -133,12 +145,8 @@ final class AppViewModel: ObservableObject {
     }
 
     /// Single forced refresh ignoring cadence windows. Published rate limits still apply.
-    /// Behaves identically to SET_POLITENESS_MODE:dev → refresh → SET_POLITENESS_MODE:production.
     func forceRefresh() async {
-        let previousFloor = SourcePipeline.devCadenceFloorSeconds
-        SourcePipeline.devCadenceFloorSeconds = 1  // 1-second floor bypasses all cadence windows
-        await refreshAll()
-        SourcePipeline.devCadenceFloorSeconds = previousFloor  // Restore to previous state
+        await refreshAll(bypassPoliteness: true)
     }
 
     func setSourceEnabled(sourceID: String, isEnabled: Bool) async {
