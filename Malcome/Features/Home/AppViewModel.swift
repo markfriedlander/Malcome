@@ -77,7 +77,8 @@ final class AppViewModel: ObservableObject {
         do {
             try await container.repository.seedSourcesIfNeeded(container.sourceRegistry.initialSeeds())
             let report = try await container.sourcePipeline.refreshEnabledSources()
-            let observations = try await container.repository.fetchObservations(limit: 500)
+            // Fetch ALL observations so the signal engine can resolve the complete identity graph
+            let observations = try await container.repository.fetchObservations()
             await ExcerptDistiller.distillNewObservations(
                 observations: observations,
                 repository: container.repository

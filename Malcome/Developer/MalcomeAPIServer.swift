@@ -544,6 +544,17 @@ class MalcomeAPIServer {
             SourcePipeline.devCadenceFloorSeconds = nil
             return (200, #"{"status":"ok","command":"SET_POLITENESS_MODE","mode":"production"}"#)
 
+        } else if trimmed == "RELINK_OBSERVATIONS" {
+            guard let model = appModel else {
+                return (503, #"{"error":"AppViewModel unavailable"}"#)
+            }
+            do {
+                let result = try await relinkAllObservations(model: model)
+                return (200, "{\"status\":\"ok\",\"command\":\"RELINK_OBSERVATIONS\",\"totalObservations\":\(result.totalObservations),\"entitiesResolved\":\(result.entitiesResolved),\"signalsComputed\":\(result.signalsComputed)}")
+            } catch {
+                return (500, "{\"error\":\(jsonEscape(error.localizedDescription))}")
+            }
+
         } else if trimmed == "EXTRACT_ROUNDUPS" {
             guard let model = appModel else {
                 return (503, #"{"error":"AppViewModel unavailable"}"#)
@@ -770,6 +781,63 @@ class MalcomeAPIServer {
     }
 
     // MARK: - Roundup Extraction for Existing Observations
+
+    // MARK: - Relink All Observations
+
+    private struct RelinkResult {
+        let totalObservations: Int
+        let entitiesResolved: Int
+        let signalsComputed: Int
+    }
+
+    private func relinkAllObservations(model: AppViewModel) async throws -> RelinkResult {
+        let repository = model.container.repository
+
+        // Fetch ALL observations — no limit
+        let allObservations = try await repository.fetchObservations()
+        let sources = try await repository.fetchSources()
+        let runHistory = try await repository.recentSignalRuns(limit: 400)
+        let pathwayStats = try await repository.fetchPathwayStats(limit: 200)
+
+        let runHistoryByName = Dictionary(grouping: runHistory) {
+            $0.canonicalEntityID.isEmpty ? $0.canonicalName : $0.canonicalEntityID
+        }
+        let pathwayStatsByPattern = Dictionary(uniqueKeysWithValues: pathwayStats.map {
+            ("\($0.domain.rawValue)::\($0.pathwayPattern)", $0)
+        })
+        let sourceMap = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0) })
+
+        // Run signal engine over ALL observations
+        let computed = model.container.signalEngine.compute(
+            from: allObservations,
+            sourcesByID: sourceMap,
+            runHistoryByName: runHistoryByName,
+            pathwayStatsByPattern: pathwayStatsByPattern,
+            now: .now
+        )
+
+        // Store results
+        try await repository.replaceCanonicalIdentityGraph(
+            entities: computed.canonicalEntities,
+            aliases: computed.aliases,
+            sourceRoles: computed.sourceRoles,
+            observationMappings: computed.observationMappings
+        )
+        try await repository.replaceEntityStageSnapshots(computed.stageSnapshots)
+        try await repository.replaceEntityHistories(computed.entityHistories)
+        try await repository.replaceSignalCandidates(Array(computed.signals.prefix(20)))
+        try await repository.storeSignalRuns(Array(computed.runs.prefix(20)))
+        try await repository.appendPathwayHistory(computed.pathwayHistories)
+        try await repository.replacePathwayStats(computed.pathwayStats)
+        try await repository.replaceSourceInfluenceStats(computed.sourceInfluenceStats)
+        try await repository.replaceOutcomeConfirmations(computed.outcomeConfirmations)
+
+        return RelinkResult(
+            totalObservations: allObservations.count,
+            entitiesResolved: computed.canonicalEntities.count,
+            signalsComputed: computed.signals.count
+        )
+    }
 
     private struct ExtractionResult {
         let roundupsFound: Int
