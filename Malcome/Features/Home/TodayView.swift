@@ -101,19 +101,32 @@ struct TodayView: View {
 
     // MARK: - Loading State
 
+    @State private var shimmerOpacity: Double = 0.7
+
     private var loadingState: some View {
         VStack(spacing: 16) {
             Spacer().frame(height: 80)
-            Text(appModel.loadingMessages.currentMessage)
-                .font(.subheadline.italic())
-                .foregroundStyle(MalcomePalette.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-                .id(appModel.loadingMessages.currentMessage)
-                .transition(.opacity.animation(.easeInOut(duration: 0.5)))
-                .animation(.easeInOut(duration: 0.5), value: appModel.loadingMessages.currentMessage)
+            if !appModel.loadingMessages.currentMessage.isEmpty {
+                Text(appModel.loadingMessages.currentMessage)
+                    .font(.subheadline.italic())
+                    .foregroundStyle(MalcomePalette.secondary)
+                    .opacity(shimmerOpacity)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .id(appModel.loadingMessages.currentMessage)
+                    .transition(.asymmetric(
+                        insertion: .opacity.animation(.easeIn(duration: 0.5)),
+                        removal: .opacity.animation(.easeOut(duration: 0.5))
+                    ))
+                    .onAppear {
+                        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                            shimmerOpacity = 1.0
+                        }
+                    }
+            }
             Spacer().frame(height: 80)
         }
+        .animation(.easeInOut(duration: 0.5), value: appModel.loadingMessages.currentMessage)
     }
 
     // MARK: - Thread Content (brief + chat as unified conversation)
@@ -121,11 +134,20 @@ struct TodayView: View {
     @ViewBuilder
     private var threadContent: some View {
         if chatMessages.isEmpty, appModel.brief == nil {
-            VStack(spacing: 12) {
+            VStack(spacing: 16) {
                 Spacer().frame(height: 40)
                 Text("Pull down to refresh")
                     .font(.subheadline)
                     .foregroundStyle(MalcomePalette.secondary)
+                Button {
+                    Task { await appModel.forceRefresh(); await loadThread() }
+                } label: {
+                    Text("Check again")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(Color.orange)
+                }
+                .buttonStyle(.plain)
+                .disabled(appModel.isRefreshing)
                 Spacer().frame(height: 40)
             }
             .frame(maxWidth: .infinity)

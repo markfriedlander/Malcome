@@ -29,7 +29,11 @@ struct MalcomeBriefGenerator: BriefGenerating {
 
     func generateBrief(from input: BriefingInput) async throws -> BriefRecord {
         let capped = capInput(input)
-        let draftResult = await DraftComposer.compose(from: capped)
+        // Pass observation and near-miss context for empty state messages
+        let totalObs = input.signals.reduce(0) { $0 + $1.signal.observationCount }
+            + input.watchlistCandidates.reduce(0) { $0 + $1.observationCount }
+        let nearMisses = input.watchlistCandidates.filter { $0.sourceFamilyCount == 1 && $0.observationCount >= 2 }.count
+        let draftResult = await DraftComposer.compose(from: capped, observationCount: max(totalObs, 100), nearMissCount: nearMisses)
         // Skip AFM polish for empty/thin states — the draft is already the final text
         let body = draftResult.sourceReferences.isEmpty
             ? draftResult.text
@@ -177,11 +181,23 @@ struct DraftResult {
 
 enum DraftComposer {
 
-    static func compose(from input: BriefingInput) async -> DraftResult {
+    /// Tracks used phrases within a single brief to prevent repetition.
+    private static var usedPhrases: Set<String> = []
+
+    private static func pickPhrase(from variants: [String]) -> String {
+        if let unused = variants.first(where: { !usedPhrases.contains($0) }) {
+            usedPhrases.insert(unused)
+            return unused
+        }
+        return variants.first ?? ""
+    }
+
+    static func compose(from input: BriefingInput, observationCount: Int = 0, nearMissCount: Int = 0) async -> DraftResult {
+        usedPhrases.removeAll()
         var tracker = SourceTracker()
         let text: String
         if input.signals.isEmpty && input.watchlistCandidates.isEmpty {
-            text = composeEmptyState()
+            text = composeEmptyState(observationCount: observationCount, nearMissCount: nearMissCount)
         } else if input.signals.isEmpty {
             text = composeWatchlistOnly(input, tracker: &tracker)
         } else {
@@ -193,14 +209,22 @@ enum DraftComposer {
     private struct SourceTracker {
         private(set) var references: [DraftResult.SourceReference] = []
         private var seenURLs: Set<String> = []
+        private var seenSourceNames: [String: Int] = [:]  // sourceName → citation index
 
         mutating func cite(sourceName: String, observation: ObservationRecord?) -> String {
+            // Deduplicate by source name across the full brief
+            if let existingIndex = seenSourceNames[sourceName] {
+                return "[\(existingIndex)]"
+            }
+
             let url = observation?.url ?? ""
             if !url.isEmpty, seenURLs.contains(url) {
                 if let idx = references.firstIndex(where: { $0.url == url }) {
+                    seenSourceNames[sourceName] = idx + 1
                     return "[\(idx + 1)]"
                 }
             }
+
             let ref = DraftResult.SourceReference(
                 sourceName: sourceName,
                 observationTitle: observation?.title ?? "",
@@ -209,7 +233,9 @@ enum DraftComposer {
             )
             references.append(ref)
             if !url.isEmpty { seenURLs.insert(url) }
-            return "[\(references.count)]"
+            let index = references.count
+            seenSourceNames[sourceName] = index
+            return "[\(index)]"
         }
     }
 
@@ -370,7 +396,12 @@ enum DraftComposer {
             if let context {
                 sentences.append(context)
             }
-            sentences.append("Consistency at this stage in \(domain) usually means something real underneath.")
+            sentences.append(pickPhrase(from: [
+                "Consistency at this stage in \(domain) usually means something real underneath.",
+                "When something keeps showing up in \(domain) without fading, that tells me it has weight.",
+                "The fact that \(domain) sources keep returning to this is worth paying attention to.",
+                "Staying power at this stage in \(domain) is more interesting than a loud entrance.",
+            ]))
 
         case .declining:
             sentences.append("I had \(name) on the radar last cycle.")
@@ -454,7 +485,38 @@ enum DraftComposer {
     // MARK: - Empty State
 
     private static func composeEmptyState() -> String {
-        "I have not landed enough corroboration yet to give you a real read. The source network is still building. I will have something when independent lanes start agreeing."
+        composeEmptyState(observationCount: 0, nearMissCount: 0)
+    }
+
+    static func composeEmptyState(observationCount: Int, nearMissCount: Int) -> String {
+        if nearMissCount > 0 {
+            // Level 3: something is close
+            let messages = [
+                "Something is almost there. I can feel it forming but I will not say the name until I am sure.",
+                "A couple of things are close. Give it another cycle.",
+                "I have got names I am sitting on. Not ready yet.",
+                "Something is building. Check back tomorrow.",
+            ]
+            return messages.randomElement()!
+        }
+
+        if observationCount >= 100 {
+            // Level 2: data exists but nothing crossed
+            let messages = [
+                "Quiet out there right now. Things are moving but nothing has crossed the line yet.",
+                "Nothing I am ready to call. That is not nothing — it means the scene is between moments.",
+                "I am watching a few things. Not ready to say the names yet.",
+                "The scene is between moments. Give it another day.",
+            ]
+            return messages.randomElement()!
+        }
+
+        // Level 1: genuinely sparse
+        let messages = [
+            "Still getting my bearings. Give me a few more days.",
+            "The network is warming up. Check back soon.",
+        ]
+        return messages.randomElement()!
     }
 
     // MARK: - Wikipedia Context
@@ -497,21 +559,30 @@ enum DraftComposer {
     private static func bestExcerptContext(from observations: [ObservationRecord]) -> String? {
         let entityName = observations.first?.authorOrArtist ?? observations.first?.normalizedEntityName ?? ""
 
-        // Prefer distilled excerpts (AFM-extracted, entity-specific)
-        for obs in observations {
+        // Sort observations: editorial sources first, then discovery/platform
+        let sorted = observations.sorted { a, b in
+            let aEditorial = a.tags.contains("editorial")
+            let bEditorial = b.tags.contains("editorial")
+            if aEditorial != bEditorial { return aEditorial }
+            return false
+        }
+
+        // Prefer distilled excerpts from editorial sources first
+        for obs in sorted {
             if let distilled = obs.distilledExcerpt, !distilled.isEmpty {
                 let cleaned = cleanEvidence(distilled)
-                if cleaned.count >= 20 {
+                if cleaned.count >= 20, !isBandcampMetadata(cleaned) {
                     return MalcomeTokenEstimator.truncateAtSentenceBoundary(cleaned, maxChars: 200)
                 }
             }
         }
 
         // Fall back to cleaned raw excerpts
-        let candidates: [(String, Bool)] = observations.compactMap { obs in
+        let candidates: [(String, Bool)] = sorted.compactMap { obs in
             guard let excerpt = obs.excerpt else { return nil }
             let cleaned = cleanExcerptForBrief(excerpt, entityName: entityName)
             if cleaned.count < 25 { return nil }
+            if isBandcampMetadata(cleaned) { return nil }
             let mentionsEntity = !entityName.isEmpty && cleaned.localizedCaseInsensitiveContains(entityName)
             return (cleaned, mentionsEntity)
         }
@@ -567,6 +638,25 @@ enum DraftComposer {
         }
 
         return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Detects Bandcamp structural metadata that shouldn't be used as brief context.
+    private static func isBandcampMetadata(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        // Pattern: short text ending with city/state/country (Bandcamp location metadata)
+        let locationPatterns = [
+            #"(?i),\s*(california|new york|los angeles|london|berlin|tokyo|portland|seattle|brooklyn|chicago|austin)"#,
+            #"(?i),\s*[a-z]+\s*$"#,  // Ends with ", CityName"
+        ]
+        // Very short with location = metadata, not context
+        if text.count < 60 {
+            for pattern in locationPatterns {
+                if lower.range(of: pattern, options: .regularExpression) != nil { return true }
+            }
+        }
+        // "Surfacing on" placeholders
+        if lower.hasPrefix("surfacing on ") { return true }
+        return false
     }
 
     private static func isGenericEditorialObservation(_ text: String) -> Bool {

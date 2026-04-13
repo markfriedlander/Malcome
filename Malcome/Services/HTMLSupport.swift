@@ -353,6 +353,15 @@ enum HTMLSupport {
             #"(?i)^interview:"#,
             #"(?i)^artist selects:"#,
             #"(?i)^the dealers:"#,
+            #"(?i)^reissue of the week:"#,
+            #"(?i)^album of the week:"#,
+            #"(?i)^track of the day:"#,
+            #"(?i)^song of the day:"#,
+            #"(?i)^video of the week:"#,
+            #"(?i)^premiere:"#,
+            #"(?i)^first listen:"#,
+            #"(?i)^record of the week:"#,
+            #"(?i)^mix of the day:"#,
         ]
 
         if recurringSeriesPatterns.contains(where: { normalized.range(of: $0, options: .regularExpression) != nil }) {

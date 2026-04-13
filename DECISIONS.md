@@ -479,6 +479,46 @@ Current window (14 days): anything with cross-family corroboration in the past t
 Prior window (60 days): used for growth scoring, comparing current period to prior period.
 Pattern window (90 days): used for progression scoring, horizon intelligence, and surfacing entities that have been building slowly.
 
+## Excerpt quality filtering for brief context
+
+Decision:
+Distilled excerpts that contain only Bandcamp structural metadata (track titles with location, album names with city) should be filtered from brief context. For entities with observations from multiple sources, editorial source excerpts should be preferred over discovery/platform source excerpts.
+
+Reason:
+"Rabbot Ho Los Angeles, California" is Bandcamp metadata, not editorial context. When an entity has observations from both Bandcamp (discovery) and The Quietus (editorial), the editorial excerpt is almost always more useful for the brief because it describes why the entity matters, not just what it is called.
+
+## Distilled excerpt prompt must require current relevance
+
+Decision:
+The AFM distillation prompt must explicitly require that the extracted sentence be about the entity being tracked and describe something current or recent. Historical quotes about other entities or publications should be rejected.
+
+Reason:
+A 1982 Melody Maker quote about Scritti Politti is vivid but completely irrelevant context for a 2026 signal about The Fall. The distillation prompt should constrain extraction to factually relevant, entity-specific, temporally appropriate content.
+
+## DraftComposer template variation
+
+Decision:
+DraftComposer must not repeat the same template phrase within a single brief. Fallback phrases like "Consistency at this stage usually means something real underneath" must have at least 3-4 variants, and a used-phrase tracker must prevent repetition within one brief generation.
+
+Reason:
+Repeated phrases break the illusion that Malcome is a person speaking. A friend would not say the same sentence twice in the same conversation.
+
+## Citation deduplication across the full brief
+
+Decision:
+Citations should be deduplicated by source URL across the entire brief. Each unique source URL gets one citation number regardless of how many signals reference it. If Bandcamp Daily supports both Thundercat and Earl Sweatshirt, both references point to the same citation chip.
+
+Reason:
+[2] Bandcamp Daily and [4] Bandcamp Daily appearing in the same brief is confusing. A unified citation index makes the brief cleaner and the citation chips more useful.
+
+## Context-aware empty state messages
+
+Decision:
+The empty state brief should use three levels of context-aware language based on data state: Level 1 for genuinely sparse data, Level 2 for data that exists but hasn't crossed thresholds, Level 3 for near-miss entities close to the signal threshold.
+
+Reason:
+A static "I have not landed enough corroboration" message gives the user no sense of progress. Context-aware messages tell them whether Malcome is just getting started, watching things that haven't crossed the line, or sitting on names that are almost ready. This builds trust and keeps users engaged during the cold start period.
+
 ## Two-tier signal architecture
 
 Decision:

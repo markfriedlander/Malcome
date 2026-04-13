@@ -123,6 +123,14 @@ final class AppViewModel: ObservableObject {
         loadingMessages.stop()
     }
 
+    /// Single forced refresh ignoring cadence windows. Published rate limits still apply.
+    func forceRefresh() async {
+        let previousFloor = SourcePipeline.devCadenceFloorSeconds
+        SourcePipeline.devCadenceFloorSeconds = 0  // Override cadence for this one refresh
+        await refreshAll()
+        SourcePipeline.devCadenceFloorSeconds = previousFloor  // Restore
+    }
+
     func setSourceEnabled(sourceID: String, isEnabled: Bool) async {
         do {
             try await container.repository.setSourceEnabled(sourceID: sourceID, isEnabled: isEnabled)

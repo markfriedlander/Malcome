@@ -53,6 +53,22 @@ struct SettingsView: View {
                 .padding(.vertical, 4)
             }
 
+            Section {
+                Button {
+                    Task { await appModel.forceRefresh() }
+                } label: {
+                    HStack {
+                        Text("Refresh now")
+                            .foregroundStyle(Color.orange)
+                        Spacer()
+                        if appModel.isRefreshing {
+                            ProgressView().controlSize(.small)
+                        }
+                    }
+                }
+                .disabled(appModel.isRefreshing)
+            }
+
             Section("About") {
                 HStack {
                     Text("Last refresh")

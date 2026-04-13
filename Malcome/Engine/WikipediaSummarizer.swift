@@ -27,7 +27,13 @@ enum WikipediaSummarizer {
         let sourceSentences = sentenceSplit(extract)
         let verified = verifyNarrative(compressed, against: sourceSentences)
 
-        return verified.isEmpty ? truncateToWords(extract, maxWords: targetWords) : verified
+        if verified.isEmpty {
+            return truncateToWords(extract, maxWords: targetWords)
+        }
+
+        // Hard cap: if AFM exceeded target, truncate at sentence boundary
+        let maxWords = targetWords + 25  // 25-word grace over target
+        return truncateToWords(verified, maxWords: maxWords)
     }
 
     // MARK: - Stage 1: AFM Compression

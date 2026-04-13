@@ -6,7 +6,7 @@ import FoundationModels
 enum ExcerptDistiller {
 
     private static let distillPrompt = """
-    Extract the single most informative sentence about the named entity from the text below. One sentence only. Entity-specific and factual. No editorializing, no opinion, no generic observations. If the text contains nothing specific about the entity, respond with just "NONE".
+    Extract the single most informative sentence about the named entity from the text below. The sentence must be about this specific entity and must describe something current or recent about them. No historical quotes about other people. No generic observations. One sentence only. If the text contains nothing specific and current about the entity, respond with just "NONE".
 
     Entity: ENTITY_NAME
     Text: EXCERPT_TEXT
