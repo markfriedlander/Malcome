@@ -134,7 +134,7 @@ struct MalcomeBriefGenerator: BriefGenerating {
         case .declining: movementHint = "is losing momentum"
         }
 
-        let prompt = "Write a brief title (5-8 words) for a cultural radar brief where \(leadName) \(movementHint) in \(domain.label.lowercased()). Specific and interesting. No generic phrases. No quotes. Just the title text."
+        let prompt = "Write a title for a cultural brief. Maximum 6 words. Calm and specific. No adjectives like 'sonic', 'remarkable', 'cultural'. No words like 'phenomenon', 'renaissance', 'unfolds', 'journey', 'explores'. Just say what is happening. Example: 'Thundercat Is Moving Again'. Subject: \(leadName) \(movementHint) in \(domain.label.lowercased()). Title:"
 
         do {
             let session = LanguageModelSession()
@@ -143,7 +143,8 @@ struct MalcomeBriefGenerator: BriefGenerating {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
                 .replacingOccurrences(of: "\"", with: "")
                 .replacingOccurrences(of: "\n", with: " ")
-            if title.count >= 5 && title.count <= 80 {
+            let wordCount = title.split(separator: " ").count
+            if title.count >= 5 && title.count <= 60 && wordCount <= 8 {
                 return title
             }
         } catch {}

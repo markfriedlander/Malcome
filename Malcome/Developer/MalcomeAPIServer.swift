@@ -544,6 +544,17 @@ class MalcomeAPIServer {
             SourcePipeline.devCadenceFloorSeconds = nil
             return (200, #"{"status":"ok","command":"SET_POLITENESS_MODE","mode":"production"}"#)
 
+        } else if trimmed == "RETAG_OBSERVATIONS" {
+            guard let model = appModel else {
+                return (503, #"{"error":"AppViewModel unavailable"}"#)
+            }
+            do {
+                let count = try await retagObservations(repository: model.container.repository)
+                return (200, "{\"status\":\"ok\",\"command\":\"RETAG_OBSERVATIONS\",\"observationsRetagged\":\(count)}")
+            } catch {
+                return (500, "{\"error\":\(jsonEscape(error.localizedDescription))}")
+            }
+
         } else if trimmed == "RELINK_OBSERVATIONS" {
             guard let model = appModel else {
                 return (503, #"{"error":"AppViewModel unavailable"}"#)
@@ -781,6 +792,35 @@ class MalcomeAPIServer {
     }
 
     // MARK: - Roundup Extraction for Existing Observations
+
+    // MARK: - Retag Observations
+
+    private func retagObservations(repository: AppRepository) async throws -> Int {
+        let observations = try await repository.fetchObservations()
+        let sources = try await repository.fetchSources()
+        let sourcesByID = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0) })
+
+        var retaggedCount = 0
+        for obs in observations {
+            guard let source = sourcesByID[obs.sourceID] else { continue }
+
+            // Re-run editorial content tagger
+            let freshTags = HTMLSupport.editorialContentTags(for: obs.title, sourceName: source.name)
+
+            // Build the full tag set: keep base tags, replace editorial content tags
+            let baseTags = obs.tags.filter { tag in
+                !["recurring_series", "roundup", "self_branded"].contains(tag)
+            }
+            let newTags = Array(Set(baseTags + freshTags)).sorted()
+
+            if newTags != obs.tags {
+                try await repository.updateObservationTags(observationID: obs.id, tags: newTags)
+                retaggedCount += 1
+            }
+        }
+
+        return retaggedCount
+    }
 
     // MARK: - Relink All Observations
 

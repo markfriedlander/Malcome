@@ -66,6 +66,8 @@ final class AppViewModel: ObservableObject {
         lastRefreshAt = try await lastRefreshTask
     }
 
+    private static let minimumLoadingDuration: TimeInterval = 15
+
     func refreshAll() async {
         guard !isRefreshing else { return }
         isRefreshing = true
@@ -73,6 +75,7 @@ final class AppViewModel: ObservableObject {
         refreshWarning = nil
         let activeDomains = Set(sourceStatuses.filter(\.source.enabled).map(\.source.domain))
         loadingMessages.start(activeDomains: activeDomains)
+        let loadingStartedAt = Date()
 
         do {
             try await container.repository.seedSourcesIfNeeded(container.sourceRegistry.initialSeeds())
@@ -119,16 +122,23 @@ final class AppViewModel: ObservableObject {
             errorMessage = error.localizedDescription
         }
 
+        // Minimum loading duration so the experience feels alive
+        let elapsed = Date().timeIntervalSince(loadingStartedAt)
+        if elapsed < Self.minimumLoadingDuration {
+            try? await Task.sleep(for: .seconds(Self.minimumLoadingDuration - elapsed))
+        }
+
         isRefreshing = false
         loadingMessages.stop()
     }
 
     /// Single forced refresh ignoring cadence windows. Published rate limits still apply.
+    /// Behaves identically to SET_POLITENESS_MODE:dev → refresh → SET_POLITENESS_MODE:production.
     func forceRefresh() async {
         let previousFloor = SourcePipeline.devCadenceFloorSeconds
-        SourcePipeline.devCadenceFloorSeconds = 0  // Override cadence for this one refresh
+        SourcePipeline.devCadenceFloorSeconds = 1  // 1-second floor bypasses all cadence windows
         await refreshAll()
-        SourcePipeline.devCadenceFloorSeconds = previousFloor  // Restore
+        SourcePipeline.devCadenceFloorSeconds = previousFloor  // Restore to previous state
     }
 
     func setSourceEnabled(sourceID: String, isEnabled: Bool) async {

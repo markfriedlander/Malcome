@@ -69,7 +69,7 @@ struct TodayView: View {
             await loadThread()
         }
         .refreshable {
-            await appModel.refreshAll()
+            await appModel.forceRefresh()
             await loadThread()
         }
         .onChange(of: appModel.brief?.id) {

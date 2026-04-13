@@ -1392,6 +1392,13 @@ actor AppRepository {
         )
     }
 
+    func updateObservationTags(observationID: String, tags: [String]) throws {
+        try execute(
+            "UPDATE observation SET tags_json = ? WHERE id = ?",
+            values: [.text(encode(tags)), .text(observationID)]
+        )
+    }
+
     func updateDistilledExcerpt(observationID: String, distilledExcerpt: String) throws {
         try execute(
             "UPDATE observation SET distilled_excerpt = ? WHERE id = ?",
