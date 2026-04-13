@@ -606,7 +606,7 @@ class MalcomeAPIServer {
                 return (503, #"{"error":"AppViewModel unavailable"}"#)
             }
             await MainActor.run {
-                Task { await model.refreshAll() }
+                Task { await model.forceRefresh() }
             }
             return (200, #"{"status":"ok","command":"NEW_BRIEF_CYCLE"}"#)
 
