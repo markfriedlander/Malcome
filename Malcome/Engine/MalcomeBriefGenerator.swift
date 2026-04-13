@@ -289,19 +289,35 @@ enum DraftComposer {
         }
 
         // Sentence 3 — Who noticed and where (with citations)
+        // Build source-with-city pairs from observations
+        var sourceCityMap: [String: String] = [:]
+        for obs in packet.observations {
+            if let location = obs.location, !location.isEmpty {
+                let sourceName = obs.subtitle ?? ""
+                if !sourceName.isEmpty && sourceCityMap[sourceName] == nil {
+                    sourceCityMap[sourceName] = location
+                }
+            }
+        }
+
         let citedSources = sources.prefix(3).enumerated().map { index, sourceName -> String in
             let obs = index < packet.observations.count ? packet.observations[index] : packet.observations.first
             let marker = tracker.cite(sourceName: sourceName, observation: obs)
             return "\(sourceName)\(marker)"
         }
 
-        if cities.count >= 2 {
-            let cityPhrase = cities.prefix(2).joined(separator: " and ")
-            if citedSources.count >= 2 {
-                sentences.append("Both \(citedSources.first ?? "") in \(cities.first ?? "") and \(citedSources.dropFirst().first ?? "") in \(cities.dropFirst().first ?? cities.first ?? "") picked this up independently.")
-            } else {
-                sentences.append("\(citedSources.joined(separator: " and ")) noticed this across \(cityPhrase).")
+        let citedWithCity = sources.prefix(3).enumerated().map { index, sourceName -> String in
+            let obs = index < packet.observations.count ? packet.observations[index] : packet.observations.first
+            let marker = tracker.cite(sourceName: sourceName, observation: obs)
+            if let city = sourceCityMap[sourceName] {
+                return "\(sourceName)\(marker) in \(city)"
             }
+            return "\(sourceName)\(marker)"
+        }
+
+        let uniqueCities = Set(sourceCityMap.values)
+        if uniqueCities.count >= 2 && citedWithCity.count >= 2 {
+            sentences.append("Both \(citedWithCity.prefix(2).joined(separator: " and ")) picked this up independently.")
         } else if citedSources.count >= 2 {
             sentences.append("\(citedSources.joined(separator: " and ")) are both picking up on this independently in \(domain).")
         } else if let source = citedSources.first {

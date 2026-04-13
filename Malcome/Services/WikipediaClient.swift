@@ -99,7 +99,18 @@ enum WikipediaClient {
             }
         }
 
-        // Strategy 4: Colon — try each part
+        // Strategy 4: Disambiguation — try domain-specific qualifiers
+        // "Thundercat" → "Thundercat (musician)" when the base title is a disambiguation page
+        let domainQualifiers = ["(musician)", "(band)", "(artist)", "(rapper)", "(singer)", "(DJ)",
+                                "(filmmaker)", "(director)", "(designer)", "(collective)"]
+        for qualifier in domainQualifiers {
+            let candidate = "\(title) \(qualifier)"
+            if await isValidArticle(candidate) {
+                return ResolvedArticle(originalTitle: title, resolvedTitle: candidate)
+            }
+        }
+
+        // Strategy 5: Colon — try each part
         if title.contains(":") {
             let parts = title.components(separatedBy: ":").map { $0.trimmingCharacters(in: .whitespaces) }
             for part in parts where !part.isEmpty {
