@@ -39,11 +39,12 @@ Use the new in-product doctrine profile as part of source review whenever adding
 13 Keep the outbound-link affordance consistent anywhere tapping leaves Malcome, including future exploration surfaces.
 14 Validate the new derived event-instance identity on-device after a fresh refresh, then decide whether the next step should be a dedicated event table or whether the derived key is sufficient for cross-source event matching in v1.
 
-15 Synthetic data initiative: build a controlled test dataset with known cross-family signals across multiple domains.
-Generate synthetic observation data that simulates realistic multi-source, multi-domain cultural signal patterns.
-This enables deterministic testing of the signal engine, brief generation, and entity resolution without depending on live source content.
-Include known entities at various lifecycle stages: emerging, rising, stable, declining, disappeared.
-Include deliberate edge cases: credit strings, staff bylines, roundup articles, same-family-only corroboration.
+15 Synthetic data initiative: build three test harnesses for comprehensive brief quality testing.
+Synthetic harness uses real entity names with synthetic signal metadata and template-generated excerpts across 200-300 diverse scenarios.
+Integration harness uses real entities with live Wikipedia API calls and real stored excerpts for pipeline correctness testing.
+Hybrid harness combines real entities and real Wikipedia with synthetic scenario metadata for end-to-end quality testing.
+Scenario dimensions cover signal count, strength, tier, domain mix, entity types, movement, watchlist state, source family diversity, geography, excerpt quality, Wikipedia availability, and sentiment.
+This enables deterministic testing without depending on live source content.
 16 Add calendar event integration via EventKit so Malcome can offer to add shows, openings, and releases to the user's calendar when an entity has date information. Native Apple framework, no dependencies. The architecture should surface date-bearing observations through the entity detail and chat layers.
 
 ## Do not expand source count broadly yet.

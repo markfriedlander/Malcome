@@ -69,6 +69,7 @@ struct MalcomeBriefGenerator: BriefGenerating {
                 signal: packet.signal,
                 observations: Array(packet.observations.prefix(BriefCaps.maxObservationsPerSignal)),
                 sourceNames: Array(packet.sourceNames.prefix(BriefCaps.maxSourceNamesPerSignal)),
+                sourceCities: packet.sourceCities,
                 priorMentions: packet.priorMentions,
                 recentMentions: packet.recentMentions
             )
@@ -259,48 +260,84 @@ enum DraftComposer {
     private static func composeLeadSignal(_ packet: BriefingInput.SignalPacket, tracker: inout SourceTracker) async -> String {
         let name = packet.signal.canonicalName
         let sources = packet.sourceNames
+        let cities = packet.sourceCities
         let domain = packet.signal.domain.label.lowercased()
         let entityType = packet.signal.entityType
-
-        // Wikipedia context first, then distilled excerpt, then entity type phrase
-        let wikiContext = await wikiContextPhrase(for: name)
-        let excerptContext = bestExcerptContext(from: packet.observations)
+        let movement = packet.signal.movement
 
         var sentences: [String] = []
 
+        // Sentence 1 — Who + what they are
+        let wikiContext = await wikiContextPhrase(for: name)
         if let wiki = wikiContext {
-            // Weave Wikipedia context into the opening: "Flying Lotus — producer, rapper out of LA —"
             sentences.append("\(name) — \(wiki) — is the one right now.")
         } else {
-            sentences.append("\(name) is the one right now.")
-            if let context = excerptContext {
-                sentences.append(context)
+            let fallbackContext = minimalEntityContext(entityType: entityType, domain: domain)
+            if !fallbackContext.isEmpty {
+                sentences.append("\(name) — \(fallbackContext) — is the one right now.")
             } else {
-                let typePhrase = entityTypePhrase(entityType)
-                if !typePhrase.isEmpty {
-                    sentences.append(typePhrase)
-                }
+                sentences.append("\(name) is the one right now.")
             }
         }
 
-        // Build source list with inline citations — pair each source with its observation
+        // Sentence 2 — What is specifically happening right now
+        let excerptContext = bestExcerptContext(from: packet.observations)
+        if let context = excerptContext {
+            sentences.append(context)
+        } else {
+            sentences.append("Something is happening — I do not have the full picture yet but the right sources are paying attention.")
+        }
+
+        // Sentence 3 — Who noticed and where (with citations)
         let citedSources = sources.prefix(3).enumerated().map { index, sourceName -> String in
             let obs = index < packet.observations.count ? packet.observations[index] : packet.observations.first
             let marker = tracker.cite(sourceName: sourceName, observation: obs)
             return "\(sourceName)\(marker)"
         }
 
-        if citedSources.count >= 3 {
-            let sourceList = citedSources.joined(separator: ", ")
-            sentences.append("When \(sourceList) are all noticing the same name independently across different parts of the \(domain) surface, that kind of agreement is hard to fake.")
-        } else if citedSources.count == 2 {
-            let sourceList = citedSources.joined(separator: " and ")
-            sentences.append("\(sourceList) are both picking up on this independently — two different lanes in \(domain) arriving at the same conclusion.")
+        if cities.count >= 2 {
+            let cityPhrase = cities.prefix(2).joined(separator: " and ")
+            if citedSources.count >= 2 {
+                sentences.append("Both \(citedSources.first ?? "") in \(cities.first ?? "") and \(citedSources.dropFirst().first ?? "") in \(cities.dropFirst().first ?? cities.first ?? "") picked this up independently.")
+            } else {
+                sentences.append("\(citedSources.joined(separator: " and ")) noticed this across \(cityPhrase).")
+            }
+        } else if citedSources.count >= 2 {
+            sentences.append("\(citedSources.joined(separator: " and ")) are both picking up on this independently in \(domain).")
         } else if let source = citedSources.first {
-            sentences.append("The signal is coming through \(source), which has a track record of being right early in \(domain).")
+            sentences.append("The signal is coming through \(source).")
+        }
+
+        // Sentence 4 — Why that agreement matters
+        if sources.count >= 2 {
+            sentences.append("When sources that watch completely different parts of the \(domain) scene agree independently, that kind of convergence is hard to fake.")
+        }
+
+        // Sentence 5 — What it suggests
+        switch movement {
+        case .new:
+            sentences.append("This is the first time it has crossed my radar.")
+        case .rising:
+            sentences.append("This is accelerating.")
+        case .stable:
+            sentences.append("This has been consistent — which at this stage is more telling than a loud entrance.")
+        case .declining:
+            sentences.append("The window on this one may be closing.")
         }
 
         return sentences.joined(separator: " ")
+    }
+
+    /// Minimal entity context when Wikipedia returns nothing.
+    private static func minimalEntityContext(entityType: EntityType, domain: String) -> String {
+        switch entityType {
+        case .creator: return "a \(domain) artist"
+        case .collective: return "a \(domain) collective"
+        case .venue: return "a \(domain) venue"
+        case .event, .eventSeries: return "a \(domain) event"
+        case .scene: return "a \(domain) scene"
+        default: return ""
+        }
     }
 
     // MARK: - Secondary Signals

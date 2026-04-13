@@ -5,6 +5,7 @@ struct BriefingInput: Sendable {
         let signal: SignalCandidateRecord
         let observations: [ObservationRecord]
         let sourceNames: [String]
+        let sourceCities: [String]
         let priorMentions: Int
         let recentMentions: Int
     }
@@ -44,10 +45,16 @@ struct BriefComposer: Sendable {
             let recentMentions = evidence.filter { $0.scrapedAt >= recentCutoff }.count
             let priorMentions = max(0, evidence.count - recentMentions)
 
+            let sourceCities = Array(Set(evidence.compactMap { obs -> String? in
+                guard let source = sourcesByID[obs.sourceID] else { return nil }
+                return source.city == .global ? nil : source.city.displayName
+            })).sorted()
+
             packets.append(BriefingInput.SignalPacket(
                 signal: signal,
                 observations: evidence,
                 sourceNames: Array(Set(evidence.compactMap { sourceNamesByID[$0.sourceID] })).sorted(),
+                sourceCities: sourceCities,
                 priorMentions: priorMentions,
                 recentMentions: recentMentions
             ))

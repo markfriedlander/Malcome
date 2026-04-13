@@ -511,6 +511,24 @@ Citations should be deduplicated by source URL across the entire brief. Each uni
 Reason:
 [2] Bandcamp Daily and [4] Bandcamp Daily appearing in the same brief is confusing. A unified citation index makes the brief cleaner and the citation chips more useful.
 
+## Lead signal paragraph structure: five sentences, six journalism questions
+
+Decision:
+The lead signal paragraph in DraftComposer must answer who, what, when, where, why, and so-what in five sentences, in this order:
+
+Sentence 1 — Who + what they are. Wikipedia context compressed to one appositive clause woven into the opening. Example: "Thundercat — LA bassist and producer known for blending jazz, funk and hip-hop — is the one right now." If Wikipedia returns nothing, use entity type and domain as minimum context. Never a bare name with no context.
+
+Sentence 2 — What is specifically happening right now. Pull from the distilledExcerpt of the highest-tier editorial source observation. Must describe a specific current activity: a release, collaboration, tour, appearance. If nothing specific is available: "Something is happening — I do not have the full picture yet but the right sources are paying attention."
+
+Sentence 3 — Who noticed and where. Source names with city context. Cross-city agreement is stronger than same-city and should be stated explicitly. "Both Bandcamp's LA discovery network and The Quietus in London picked this up independently."
+
+Sentence 4 — Why that agreement matters. The corroboration explanation moves here, not sentence 1. "When sources that watch completely different parts of the scene agree independently, that kind of convergence is hard to fake."
+
+Sentence 5 — What it suggests. Movement classification in plain language. Rising: "This is accelerating." Stable: "This has been consistent." New: "This is the first time it has crossed my radar." Declining: "The window on this one may be closing."
+
+Reason:
+The previous brief answered why Malcome was mentioning something but never answered who the entity is or what specifically is happening with them. A reader who does not know Thundercat has no context. A reader who does not know Lala Lala has nothing to orient them. The five-sentence structure ensures every lead paragraph tells a complete story.
+
 ## Brief title is the lead entity name only
 
 Decision:

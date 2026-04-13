@@ -43,6 +43,33 @@ Local HTTP API for rapid iteration without a build cycle. Endpoints for brief ge
 | `POST /brief` | Send handcrafted signal data to AFM |
 | `POST /chat` | Send chat message with full prompt diagnostics |
 
+## Synthetic Data Initiative (Planned)
+
+Three harness types for comprehensive quality testing:
+
+### Synthetic Harness
+Real entity names from the database, synthetic signal metadata, template-generated excerpts. Tests voice and narrative quality across 200-300 diverse scenarios.
+
+Scenario dimensions:
+- Signal count: 1, 2, 3, 4+
+- Signal strength: strong, medium, weak
+- Signal tier: current, historical, mixed
+- Domain mix: music only, art only, film only, cross-domain
+- Entity types: creator, collective, venue, event, release
+- Movement: rising, stable, declining, new
+- Watchlist state: empty, partial, full
+- Source family diversity: 2, 3, 4+ families
+- Geography: LA only, LA+NYC, LA+London, cross-city
+- Excerpt quality: clean, garbled, missing
+- Wikipedia availability: rich, stub, absent
+- Sentiment: positive, skeptical, neutral, mixed
+
+### Integration Harness
+Real entities, live Wikipedia API calls, real stored excerpts. Tests pipeline correctness — Wikipedia resolution, excerpt distillation quality, context assembly.
+
+### Hybrid Harness
+Real entities, real Wikipedia, synthetic scenario metadata. Most realistic end-to-end quality test.
+
 ## Testing Workflow
 
 1. Make engine changes → run pipeline harness
