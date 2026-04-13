@@ -192,6 +192,18 @@ enum ConversionState: String, Codable, CaseIterable, Sendable {
     }
 }
 
+enum SignalTier: String, Codable, CaseIterable, Sendable {
+    case current
+    case historical
+
+    nonisolated var label: String {
+        switch self {
+        case .current: "Current"
+        case .historical: "Historical"
+        }
+    }
+}
+
 enum WatchlistStage: String, Codable, CaseIterable, Sendable {
     case early
     case forming
@@ -420,6 +432,7 @@ struct SignalCandidateRecord: Identifiable, Codable, Hashable, Sendable {
     let sourceInfluenceSummary: String
     let progressionSummary: String
     let evidenceSummary: String
+    let signalTier: SignalTier
 }
 
 struct CanonicalEntityRecord: Identifiable, Codable, Hashable, Sendable {

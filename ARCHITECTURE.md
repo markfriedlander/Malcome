@@ -397,6 +397,20 @@ These caps are named constants, not magic numbers.
 
 BriefComposer applies all caps before passing BriefingInput to the generator.
 
+Observation windows:
+
+Current window is 14 days. Any cross-family corroboration within this window is active intelligence and leads the brief.
+Prior window is 60 days. Used for growth scoring by comparing current period activity to the prior period.
+Pattern window is 90 days. Used for progression scoring, horizon intelligence, and surfacing entities that have been building slowly.
+These windows reflect that the product is designed for weekly or biweekly use, not daily monitoring.
+
+Signal tiers:
+
+SignalCandidateRecord carries a signalTier field: current or historical.
+Current tier: cross-family corroboration in the 14-day window. Leads the brief.
+Historical tier: cross-family corroboration in the 90-day window but not the 14-day window. Framed as pattern intelligence.
+DraftComposer uses different language per tier: current signals get confident lead framing, historical signals get "I have been watching this" framing.
+
 DraftComposer:
 
 DraftComposer is deterministic Swift code inside MalcomeBriefGenerator that turns capped BriefingInput into Malcome-voiced prose.

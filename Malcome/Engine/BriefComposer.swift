@@ -36,7 +36,7 @@ struct BriefComposer: Sendable {
         let sourceInfluenceByID = Dictionary(uniqueKeysWithValues: sourceInfluenceStats.map { ($0.id, $0) })
         let observationEntityIDs = latestObservations.map { $0.canonicalEntityID.isEmpty ? $0.normalizedEntityName : $0.canonicalEntityID }
         let entityHistoriesByID = try await repository.entityHistories(forCanonicalEntityIDs: observationEntityIDs)
-        let recentCutoff = Calendar.current.date(byAdding: .day, value: -3, to: .now) ?? .now
+        let recentCutoff = Calendar.current.date(byAdding: .day, value: -14, to: .now) ?? .now
 
         var packets: [BriefingInput.SignalPacket] = []
         for signal in signals {
@@ -149,7 +149,7 @@ struct BriefComposer: Sendable {
         entityHistoriesByID: [String: EntityHistoryRecord] = [:],
         limit: Int
     ) -> [WatchlistCandidate] {
-        let recentCutoff = Calendar.current.date(byAdding: .day, value: -10, to: .now) ?? .now
+        let recentCutoff = Calendar.current.date(byAdding: .day, value: -14, to: .now) ?? .now
         let filtered = observations.filter { observation in
             (observation.publishedAt ?? observation.scrapedAt) >= recentCutoff
         }

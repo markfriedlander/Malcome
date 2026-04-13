@@ -467,6 +467,26 @@ Current seed size: 21MB with 2647 observations across 31 sources. Under the 50MB
 Reason:
 A fresh install with an empty database is nearly useless for weeks. The corroboration threshold requires historical depth that takes time to accumulate organically. The seed database provides months of pre-processed observations and entity history. The first-launch backfill covers the gap between the seed database snapshot and the current moment. Together they ensure every user gets a useful Malcome from first launch.
 
+## Observation windows: 14/60/90 days, not 3/10
+
+Decision:
+Replace the hardcoded 3-day current window and 10-day prior window with windows that reflect real user behavior: 14-day current window, 60-day prior window, 90-day pattern window.
+
+Reason:
+Malcome is for people who do not have time to check an app every three days. That is the entire premise. A user might open Malcome once a week or once every two weeks. A 3-day current window means most observations are already historical by the time the user sees them. A 14-day current window keeps two weeks of cross-family corroboration as active intelligence, not stale data.
+
+Current window (14 days): anything with cross-family corroboration in the past two weeks is active intelligence. These lead the brief.
+Prior window (60 days): used for growth scoring, comparing current period to prior period.
+Pattern window (90 days): used for progression scoring, horizon intelligence, and surfacing entities that have been building slowly.
+
+## Two-tier signal architecture
+
+Decision:
+Signals carry an explicit tier: current (cross-family corroboration in the 14-day window) or historical (cross-family corroboration in the 90-day pattern window but not the 14-day window). DraftComposer uses different language for each tier.
+
+Reason:
+Tier 1 signals are active intelligence: "This is what has been moving." Tier 2 signals are pattern intelligence: "This has been building. I have been sitting on it." Both are valuable to the user but they carry different confidence levels and should be framed differently. A user who opens Malcome after two weeks gets both what is happening now and what has been developing in the background.
+
 ## Domain-specific context fallbacks (planned)
 
 Decision:

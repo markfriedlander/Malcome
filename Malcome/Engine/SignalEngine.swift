@@ -102,8 +102,9 @@ struct SignalEngine: Sendable {
         sourceInfluenceByKey: [String: SourceInfluenceStatRecord],
         now: Date = .now
     ) -> [SignalCandidateRecord] {
-        let recentCutoff = Calendar.current.date(byAdding: .day, value: -3, to: now) ?? now
-        let priorCutoff = Calendar.current.date(byAdding: .day, value: -10, to: now) ?? now
+        // Windows reflect weekly/biweekly user cadence, not daily monitoring
+        let recentCutoff = Calendar.current.date(byAdding: .day, value: -14, to: now) ?? now
+        let priorCutoff = Calendar.current.date(byAdding: .day, value: -60, to: now) ?? now
         let previousRunsByName = latestRuns(from: runHistoryByName)
 
         let rawSignals = groupedObservations.compactMap { canonicalEntityID, group in
@@ -189,7 +190,8 @@ struct SignalEngine: Sendable {
                 pathwaySummary: raw.pathwaySummary,
                 sourceInfluenceSummary: raw.sourceInfluenceSummary,
                 progressionSummary: raw.progressionSummary,
-                evidenceSummary: raw.evidenceSummary
+                evidenceSummary: raw.evidenceSummary,
+                signalTier: raw.currentSourceFamilyCount >= 2 ? .current : .historical
             )
         }
 
@@ -1616,7 +1618,8 @@ struct SignalEngine: Sendable {
                 progressionSummary: previous.progressionPattern.isEmpty
                     ? "No durable progression path was recorded before the signal dropped out."
                     : "Last known progression pattern: \(previous.progressionPattern).",
-                evidenceSummary: "No current support. Last seen \(formattedGap(days: max(1, daysSincePrevious))) ago with \(previous.sourceCount) supporting sources."
+                evidenceSummary: "No current support. Last seen \(formattedGap(days: max(1, daysSincePrevious))) ago with \(previous.sourceCount) supporting sources.",
+                signalTier: .historical
             )
         }
     }

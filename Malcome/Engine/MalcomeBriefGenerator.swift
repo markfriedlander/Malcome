@@ -30,7 +30,10 @@ struct MalcomeBriefGenerator: BriefGenerating {
     func generateBrief(from input: BriefingInput) async throws -> BriefRecord {
         let capped = capInput(input)
         let draftResult = await DraftComposer.compose(from: capped)
-        let body = await polishWithAFM(draftResult.text)
+        // Skip AFM polish for empty/thin states — the draft is already the final text
+        let body = draftResult.sourceReferences.isEmpty
+            ? draftResult.text
+            : await polishWithAFM(draftResult.text)
         let title = await briefTitle(from: capped, briefBody: body)
 
         let citations = draftResult.sourceReferences.enumerated().map { index, ref in
@@ -217,21 +220,45 @@ enum DraftComposer {
     private static func composeFullBrief(_ input: BriefingInput, tracker: inout SourceTracker) async -> String {
         var paragraphs: [String] = []
 
-        if let lead = input.signals.first {
+        let currentSignals = input.signals.filter { $0.signal.signalTier == .current }
+        let historicalSignals = input.signals.filter { $0.signal.signalTier == .historical }
+
+        // Tier 1: current signals lead the brief
+        if let lead = currentSignals.first {
             paragraphs.append(await composeLeadSignal(lead, tracker: &tracker))
         }
-
-        for packet in input.signals.dropFirst() {
+        for packet in currentSignals.dropFirst() {
             paragraphs.append(await composeSecondarySignal(packet, tracker: &tracker))
         }
 
+        // Tier 2: historical signals — "I've been sitting on this"
+        if !historicalSignals.isEmpty {
+            if !paragraphs.isEmpty {
+                paragraphs[paragraphs.count - 1] += " There is also something I have been sitting on."
+            }
+            for packet in historicalSignals {
+                let name = packet.signal.canonicalName
+                let domain = packet.signal.domain.label.lowercased()
+                let sources = packet.sourceNames.prefix(3).joined(separator: " and ")
+                paragraphs.append("\(name) has been building quietly in \(domain). I have been watching this for a while — \(sources) have both noticed independently, and the pattern has held. This is not new news, but it is durable, which is often more interesting.")
+            }
+        }
+
+        // If no current signals at all, use historical as lead
+        if currentSignals.isEmpty, let lead = historicalSignals.first, paragraphs.isEmpty {
+            paragraphs.append(await composeLeadSignal(lead, tracker: &tracker))
+            for packet in historicalSignals.dropFirst() {
+                paragraphs.append(await composeSecondarySignal(packet, tracker: &tracker))
+            }
+        }
+
+        // Watchlist
         if !input.watchlistCandidates.isEmpty {
             if !paragraphs.isEmpty {
                 paragraphs[paragraphs.count - 1] += " The rest of today's radar is earlier — names that are showing up but have not crossed the corroboration line yet."
             }
             paragraphs.append(composeWatchlistParagraph(input.watchlistCandidates))
         } else if input.signals.count == 1 {
-            // Thin-data case: only one signal, no watchlist. Expand the read.
             let lead = input.signals[0]
             let domain = lead.signal.domain.label.lowercased()
             if lead.recentMentions > 0 && lead.priorMentions > 0 {

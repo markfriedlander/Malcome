@@ -339,8 +339,8 @@ actor AppRepository {
                     id, canonical_entity_id, domain, canonical_name, entity_type, first_seen_at, latest_seen_at, source_count,
                     observation_count, current_source_count, current_source_family_count, current_observation_count, historical_source_count, historical_observation_count, growth_score, diversity_score, repeat_appearance_score, progression_score,
                     saturation_score, emergence_score, confidence, movement, maturity, lifecycle_state, conversion_state, outcome_tiers_json, supporting_sources_json,
-                    progression_stages_json, progression_pattern, movement_summary, maturity_summary, lifecycle_summary, conversion_summary, pathway_summary, source_influence_summary, progression_summary, evidence_summary
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    progression_stages_json, progression_pattern, movement_summary, maturity_summary, lifecycle_summary, conversion_summary, pathway_summary, source_influence_summary, progression_summary, evidence_summary, signal_tier
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 values: [
                     .text(signal.id),
@@ -380,6 +380,7 @@ actor AppRepository {
                     .text(signal.sourceInfluenceSummary),
                     .text(signal.progressionSummary),
                     .text(signal.evidenceSummary),
+                    .text(signal.signalTier.rawValue),
                 ]
             )
         }
@@ -395,7 +396,7 @@ actor AppRepository {
                    current_source_count, current_source_family_count, current_observation_count, historical_source_count, historical_observation_count,
                    growth_score, diversity_score, repeat_appearance_score, progression_score, saturation_score,
                    emergence_score, confidence, movement, maturity, lifecycle_state, conversion_state, outcome_tiers_json, supporting_sources_json, progression_stages_json,
-                   progression_pattern, movement_summary, maturity_summary, lifecycle_summary, conversion_summary, pathway_summary, source_influence_summary, progression_summary, evidence_summary
+                   progression_pattern, movement_summary, maturity_summary, lifecycle_summary, conversion_summary, pathway_summary, source_influence_summary, progression_summary, evidence_summary, signal_tier
             FROM signal_candidate
             \(activeFilter)
             ORDER BY emergence_score DESC, latest_seen_at DESC
@@ -439,7 +440,8 @@ actor AppRepository {
                 pathwaySummary: text(statement, 33),
                 sourceInfluenceSummary: text(statement, 34),
                 progressionSummary: text(statement, 35),
-                evidenceSummary: text(statement, 36)
+                evidenceSummary: text(statement, 36),
+                signalTier: SignalTier(rawValue: nullableText(statement, 37) ?? "current") ?? .current
             )
         }
     }
@@ -1609,6 +1611,7 @@ actor AppRepository {
             """,
             values: []
         )
+        try addColumnIfNeeded(database: database, table: "signal_candidate", column: "signal_tier", definition: "TEXT NOT NULL DEFAULT 'current'")
         try addColumnIfNeeded(database: database, table: "signal_candidate", column: "canonical_entity_id", definition: "TEXT NOT NULL DEFAULT ''")
         try addColumnIfNeeded(database: database, table: "signal_candidate", column: "domain", definition: "TEXT NOT NULL DEFAULT 'general_culture'")
         try addColumnIfNeeded(database: database, table: "signal_candidate", column: "entity_type", definition: "TEXT NOT NULL DEFAULT 'unknown'")
