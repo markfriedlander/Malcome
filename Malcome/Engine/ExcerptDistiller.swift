@@ -28,7 +28,7 @@ enum ExcerptDistiller {
         }
 
         // Cap to avoid long ingest delays — distill the most recent observations first
-        let batch = needsDistillation.prefix(10)
+        let batch = needsDistillation.prefix(30)
 
         for observation in batch {
             guard let excerpt = observation.excerpt else { continue }

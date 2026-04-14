@@ -6,7 +6,7 @@ import FoundationModels
 enum BriefCaps {
     static let maxSignals = 3
     static let maxWatchlistItems = 4
-    static let maxObservationsPerSignal = 2
+    static let maxObservationsPerSignal = 4
     static let maxSourceNamesPerSignal = 3
     static let maxSourceNamesTotal = 8
     static let maxEvidenceSummaryChars = 200
@@ -600,7 +600,24 @@ enum DraftComposer {
             return MalcomeTokenEstimator.truncateAtSentenceBoundary(fallback.0, maxChars: 200)
         }
 
-        // No excerpt is better than a misleading one
+        // Last resort: take the first substantial sentence from any editorial excerpt,
+        // with minimal cleaning (just HTML entities and trim)
+        for obs in sorted {
+            guard let excerpt = obs.excerpt, !excerpt.isEmpty else { continue }
+            if excerpt.hasPrefix("Surfacing on ") { continue }
+            if isBandcampMetadata(excerpt) { continue }
+            let cleaned = cleanEvidence(excerpt)
+            if cleaned.count < 30 { continue }
+            // Find first proper sentence
+            if let dotSpace = cleaned.range(of: ". ") {
+                let firstSentence = String(cleaned[cleaned.startIndex...dotSpace.lowerBound]) + "."
+                if firstSentence.count >= 30 {
+                    return MalcomeTokenEstimator.truncateAtSentenceBoundary(firstSentence, maxChars: 200)
+                }
+            }
+            return MalcomeTokenEstimator.truncateAtSentenceBoundary(cleaned, maxChars: 200)
+        }
+
         return nil
     }
 
@@ -691,6 +708,16 @@ enum DraftComposer {
 
     static func cleanEvidence(_ text: String) -> String {
         var cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Decode common HTML entities
+        cleaned = cleaned.replacingOccurrences(of: "&hellip;", with: "...")
+        cleaned = cleaned.replacingOccurrences(of: "&amp;", with: "&")
+        cleaned = cleaned.replacingOccurrences(of: "&mdash;", with: "—")
+        cleaned = cleaned.replacingOccurrences(of: "&ndash;", with: "–")
+        cleaned = cleaned.replacingOccurrences(of: "&lsquo;", with: "'")
+        cleaned = cleaned.replacingOccurrences(of: "&rsquo;", with: "'")
+        cleaned = cleaned.replacingOccurrences(of: "&ldquo;", with: "\u{201C}")
+        cleaned = cleaned.replacingOccurrences(of: "&rdquo;", with: "\u{201D}")
+        cleaned = cleaned.replacingOccurrences(of: "[&hellip;]", with: "...")
         // Strip all bullet characters (leading and embedded)
         cleaned = cleaned.replacingOccurrences(of: "• ", with: "")
         cleaned = cleaned.replacingOccurrences(of: "•", with: "")
