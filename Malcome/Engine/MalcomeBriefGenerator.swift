@@ -146,11 +146,13 @@ enum DraftComposer {
     private static var usedPhrases: Set<String> = []
 
     private static func pickPhrase(from variants: [String]) -> String {
-        if let unused = variants.first(where: { !usedPhrases.contains($0) }) {
-            usedPhrases.insert(unused)
-            return unused
+        let available = variants.filter { !usedPhrases.contains($0) }
+        if let pick = available.randomElement() {
+            usedPhrases.insert(pick)
+            return pick
         }
-        return variants.first ?? ""
+        // All used — pick random from full set
+        return variants.randomElement() ?? ""
     }
 
     static func compose(from input: BriefingInput, observationCount: Int = 0, nearMissCount: Int = 0) async -> DraftResult {
@@ -239,9 +241,19 @@ enum DraftComposer {
             let lead = input.signals[0]
             let domain = lead.signal.domain.label.lowercased()
             if lead.recentMentions > 0 && lead.priorMentions > 0 {
-                paragraphs.append("This is not a one-off sighting. The current evidence is fresh, but there is stored history behind it too. That combination — live corroboration plus a prior track record — is what separates a real signal from noise.")
+                paragraphs.append(pickPhrase(from: [
+                    "This is not a one-off sighting. The current evidence is fresh, but there is stored history behind it too.",
+                    "This name has history in my sources. The current attention is new, but the foundation is not.",
+                    "I have seen this name before in stored history. The fact that it is surfacing again with fresh corroboration makes it more interesting, not less.",
+                    "There is both current and historical evidence here. That combination usually means something durable.",
+                ]))
             } else {
-                paragraphs.append("The \(domain) radar is thin right now. One signal does not make a pattern. But when the corroboration is this clean, it is worth leading with even if the rest of the surface is still quiet.")
+                paragraphs.append(pickPhrase(from: [
+                    "The \(domain) radar is thin right now. One signal does not make a pattern. But when the corroboration is this clean, it is worth leading with.",
+                    "It is a quiet cycle for \(domain). But the quality of this one signal is high enough to lead with.",
+                    "Not much else on the \(domain) surface right now. But this one is clean and I would rather show you one real signal than fill space.",
+                    "The \(domain) radar has one strong read and not much else. That is an honest picture.",
+                ]))
             }
         }
 
@@ -268,15 +280,25 @@ enum DraftComposer {
         var sentences: [String] = []
 
         // Sentence 1 — Who + what they are
-        let wikiContext = await wikiContextPhrase(for: name)
+        let wikiContext = await wikiContextPhrase(for: name, domain: packet.signal.domain)
+        let leadOpener = pickPhrase(from: [
+            "is the one right now",
+            "is where the attention is",
+            "is the name I keep coming back to",
+            "has my attention",
+            "is the name to know right now",
+            "is leading today's radar",
+            "is the one I am watching closest",
+            "is at the front of today's read",
+        ])
         if let wiki = wikiContext {
-            sentences.append("\(name) — \(wiki) — is the one right now.")
+            sentences.append("\(name) — \(wiki) — \(leadOpener).")
         } else {
             let fallbackContext = minimalEntityContext(entityType: entityType, domain: domain)
             if !fallbackContext.isEmpty {
-                sentences.append("\(name) — \(fallbackContext) — is the one right now.")
+                sentences.append("\(name) — \(fallbackContext) — \(leadOpener).")
             } else {
-                sentences.append("\(name) is the one right now.")
+                sentences.append("\(name) \(leadOpener).")
             }
         }
 
@@ -285,7 +307,16 @@ enum DraftComposer {
         if let context = excerptContext {
             sentences.append(context)
         } else {
-            sentences.append("Something is happening — I do not have the full picture yet but the right sources are paying attention.")
+            sentences.append(pickPhrase(from: [
+                "Something is happening — I do not have the full picture yet but the right sources are paying attention.",
+                "The details are still forming, but the fact that independent sources are converging on this name is worth noting.",
+                "I do not have the full story yet, but when this many sources start pointing the same direction, I start paying attention.",
+                "There is movement around this name. The specifics are still coming into focus.",
+                "The sources are noticing something. I am still assembling the picture but the pattern is real.",
+                "I cannot tell you exactly what is happening yet, but the right people are looking in this direction.",
+                "The shape of this is still forming. What I can tell you is that the attention is real and it is coming from the right places.",
+                "Something is moving. I will have more when the next cycle fills in the details.",
+            ]))
         }
 
         // Sentence 3 — Who noticed and where (with citations)
@@ -326,19 +357,48 @@ enum DraftComposer {
 
         // Sentence 4 — Why that agreement matters
         if sources.count >= 2 {
-            sentences.append("When sources that watch completely different parts of the \(domain) scene agree independently, that kind of convergence is hard to fake.")
+            sentences.append(pickPhrase(from: [
+                "When sources that watch completely different parts of the \(domain) scene agree independently, that kind of convergence is hard to fake.",
+                "Independent agreement across different \(domain) lanes is the pattern I trust most. You cannot coordinate this by accident.",
+                "The interesting part is not any single mention — it is the fact that unrelated sources are arriving at the same conclusion.",
+                "This is what real emergence looks like in \(domain): different vantage points, same name, no coordination.",
+                "Cross-source agreement is the strongest signal I can give you. These sources do not talk to each other.",
+                "When genuinely independent parts of the \(domain) scene converge on a name without coordinating, I take it seriously.",
+                "The corroboration here is real — these are not the same editors reading the same press release.",
+                "Independent sources noticing the same thing is the pattern that separates signal from noise in \(domain).",
+            ]))
         }
 
         // Sentence 5 — What it suggests
         switch movement {
         case .new:
-            sentences.append("This is the first time it has crossed my radar.")
+            sentences.append(pickPhrase(from: [
+                "This is the first time it has crossed my radar.",
+                "This is a new name on the radar. First appearance this cycle.",
+                "I had not seen this before this cycle. That makes it worth watching.",
+                "New to the radar. The fact that it arrived with corroboration is notable.",
+            ]))
         case .rising:
-            sentences.append("This is accelerating.")
+            sentences.append(pickPhrase(from: [
+                "This is accelerating.",
+                "The momentum is building.",
+                "This is picking up speed.",
+                "Each cycle, the support gets broader.",
+            ]))
         case .stable:
-            sentences.append("This has been consistent — which at this stage is more telling than a loud entrance.")
+            sentences.append(pickPhrase(from: [
+                "This has been consistent — which at this stage is more telling than a loud entrance.",
+                "Staying power at this stage matters more than a sharp spike.",
+                "The consistency is the story. This is not going away.",
+                "Steady presence across multiple cycles. That is usually more meaningful than a single loud moment.",
+            ]))
         case .declining:
-            sentences.append("The window on this one may be closing.")
+            sentences.append(pickPhrase(from: [
+                "The window on this one may be closing.",
+                "The support is thinning. I am keeping it in view but the momentum is fading.",
+                "This was stronger last cycle. The attention is not holding.",
+                "The pattern is weakening. Worth watching but not leading with.",
+            ]))
         }
 
         return sentences.joined(separator: " ")
@@ -363,7 +423,7 @@ enum DraftComposer {
         let sources = packet.sourceNames
         let domain = packet.signal.domain.label.lowercased()
         let movement = packet.signal.movement
-        let wikiContext = await wikiContextPhrase(for: name)
+        let wikiContext = await wikiContextPhrase(for: name, domain: packet.signal.domain)
         let context = wikiContext ?? bestExcerptContext(from: packet.observations)
 
         let citedSources = sources.prefix(3).enumerated().map { index, sourceName -> String in
@@ -376,7 +436,12 @@ enum DraftComposer {
 
         switch movement {
         case .new:
-            sentences.append("\(name) caught my attention for a different reason.")
+            sentences.append(pickPhrase(from: [
+                "\(name) caught my attention for a different reason.",
+                "\(name) is new on the radar.",
+                "\(name) just appeared this cycle.",
+                "\(name) is a name I had not seen before this pass.",
+            ]))
             if let context {
                 sentences.append(context)
             }
@@ -386,7 +451,12 @@ enum DraftComposer {
             }
 
         case .rising:
-            sentences.append("\(name) has been building.")
+            sentences.append(pickPhrase(from: [
+                "\(name) has been building.",
+                "\(name) is picking up momentum.",
+                "\(name) keeps gaining ground.",
+                "\(name) is getting louder across the network.",
+            ]))
             if let context {
                 sentences.append(context)
             }
@@ -434,7 +504,12 @@ enum DraftComposer {
                 } else {
                     parts.append("\(name) is corroborating across \(candidate.sourceFamilyCount) independent source families in \(domain).")
                 }
-                parts.append("One more independent confirmation and this moves from watch to signal.")
+                parts.append(pickPhrase(from: [
+                    "One more independent confirmation and this moves from watch to signal.",
+                    "Almost there. One more independent source and I would call this a signal.",
+                    "Close to crossing the line. One more independent lane would do it.",
+                    "The pattern is forming but needs one more independent confirmation before I lead with it.",
+                ]))
 
             case .forming:
                 parts.append("\(name) keeps showing up in \(domain) but only in \(candidate.sourceFamilyCount) lane\(candidate.sourceFamilyCount == 1 ? "" : "s") so far.")
@@ -472,11 +547,21 @@ enum DraftComposer {
             ? "today's source mix"
             : input.domainMix.joined(separator: " and ").lowercased()
 
-        paragraphs.append("No name has crossed the corroboration line yet, but I have been watching the \(domainPhrase) surface and there are patterns forming.")
+        paragraphs.append(pickPhrase(from: [
+            "No name has crossed the corroboration line yet, but I have been watching the \(domainPhrase) surface and there are patterns forming.",
+            "Nothing has graduated to a full signal yet, but the \(domainPhrase) radar is not empty. Here is what I am watching.",
+            "The \(domainPhrase) surface is active but nothing has hit the corroboration threshold yet. These are the names that are closest.",
+            "I do not have a strong call yet, but these names keep turning up in the \(domainPhrase) lanes and that is worth telling you about.",
+        ]))
 
         paragraphs.append(composeWatchlistParagraph(input.watchlistCandidates))
 
-        paragraphs.append("None of this is a signal yet. That is the honest read. But these are the names I would want to know if I were you, and I will tell you the moment one of them breaks through.")
+        paragraphs.append(pickPhrase(from: [
+            "None of this is a signal yet. That is the honest read. But these are the names I would want to know if I were you.",
+            "I am not ready to call any of these yet. But I wanted you to hear the names before everyone else does.",
+            "Nothing here is certain. But if you asked me where to look next, these are the directions I would point.",
+            "These are pre-signal names. The corroboration is not there yet but the early attention is real.",
+        ]))
 
         if let highlight = input.sourceInfluenceHighlights.first {
             paragraphs[paragraphs.count - 1] += " " + cleanEvidence(highlight)
@@ -524,36 +609,46 @@ enum DraftComposer {
 
     // MARK: - Wikipedia Context
 
-    /// Fetches Wikipedia context and extracts a concise descriptive phrase.
-    /// "Flying Lotus, born Steven Ellison, is an American musician..." → "producer, rapper, filmmaker out of Los Angeles"
-    private static func wikiContextPhrase(for entityName: String) async -> String? {
-        guard let summary = await WikipediaClient.contextSummary(for: entityName) else { return nil }
+    /// Fetches Wikipedia context and uses AFM to compress it into a clean 8-12 word appositive.
+    private static func wikiContextPhrase(for entityName: String, domain: CulturalDomain = .music) async -> String? {
+        guard let summary = await WikipediaClient.contextSummary(for: entityName, domain: domain) else { return nil }
 
         let firstSentence = summary.firstSentence
         guard !firstSentence.isEmpty else { return nil }
 
-        // Try to extract the descriptive part after "is a/an"
+        // Use AFM to compress into a clean appositive
+        if SystemLanguageModel.default.isAvailable {
+            let prompt = "Compress this into an 8-12 word description. Do NOT include the person's name — just describe what they do. No full sentences. Example input: 'Thundercat is an American musician and bassist from Los Angeles.' Example output: 'LA bassist and producer blending jazz, funk and hip-hop'. Input: \(firstSentence). Output:"
+            do {
+                let session = LanguageModelSession()
+                let response = try await session.respond(to: prompt)
+                let phrase = response.content
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(of: "\"", with: "")
+                let wordCount = phrase.split(separator: " ").count
+                if wordCount >= 4 && wordCount <= 20 && !phrase.isEmpty {
+                    return phrase
+                }
+            } catch {}
+        }
+
+        // Regex fallback if AFM unavailable
         let patterns = [
             #"(?:is|was) (?:an? )(.+?)(?:\.|$)"#,
             #"(?:are|were) (?:an? )(.+?)(?:\.|$)"#,
         ]
-
         for pattern in patterns {
             if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive),
                let match = regex.firstMatch(in: firstSentence, range: NSRange(firstSentence.startIndex..., in: firstSentence)),
                let range = Range(match.range(at: 1), in: firstSentence) {
                 let descriptor = String(firstSentence[range]).trimmingCharacters(in: .whitespaces)
-                if descriptor.count >= 5 && descriptor.count <= 200 {
-                    return MalcomeTokenEstimator.truncateAtSentenceBoundary(descriptor, maxChars: 120)
+                if descriptor.count >= 5 && descriptor.count <= 120 {
+                    return MalcomeTokenEstimator.truncateAtSentenceBoundary(descriptor, maxChars: 80)
                 }
             }
         }
 
-        // Fallback: use the first sentence as-is if short enough
-        if firstSentence.count <= 150 {
-            return firstSentence
-        }
-
+        if firstSentence.count <= 100 { return firstSentence }
         return nil
     }
 

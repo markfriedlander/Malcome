@@ -237,9 +237,20 @@ enum SyntheticHarness {
                 let brief = try await generator.generateBrief(from: input)
                 let elapsed = Date().timeIntervalSince(start)
 
-                let wikiResolved = !brief.body.contains("Something is happening — I do not have the full picture")
-                    && !brief.body.contains("is the one right now.") // bare name = no wiki
-                    && brief.body.contains(" — ") // appositive structure = wiki resolved
+                // Check Wikipedia resolution by looking for the appositive with non-fallback content
+                let leadName = input.signals.first?.signal.canonicalName ?? ""
+                let wikiResolved: Bool = {
+                    // If the brief contains "[name] — [context] — " where context is NOT a minimal fallback
+                    let minimalFallbacks = ["a music artist", "a film artist", "a music collective",
+                                           "a music venue", "a music event", "a music scene"]
+                    guard brief.body.contains(" — ") else { return false }
+                    // Check if any minimal fallback appears right after the name
+                    for fallback in minimalFallbacks {
+                        if brief.body.contains("\(leadName) — \(fallback)") { return false }
+                    }
+                    // Has appositive that's not a minimal fallback = Wikipedia resolved
+                    return brief.body.contains("\(leadName) — ")
+                }()
 
                 let excerptSource: String
                 if brief.body.contains("Something is happening — I do not have the full picture") {

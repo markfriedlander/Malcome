@@ -50,6 +50,39 @@ enum WikipediaClient {
         return summary
     }
 
+    /// Context summary with domain validation — rejects Wikipedia results that don't match the expected domain.
+    static func contextSummary(for entityName: String, domain: CulturalDomain) async -> Summary? {
+        guard let summary = await contextSummary(for: entityName) else { return nil }
+
+        // Domain sniff: reject if the extract describes something clearly outside the cultural domain
+        if isDomainMismatch(extract: summary.extract, expectedDomain: domain) {
+            return nil
+        }
+
+        return summary
+    }
+
+    /// Lightweight content sniff to detect obvious domain mismatches.
+    private static func isDomainMismatch(extract: String, expectedDomain: CulturalDomain) -> Bool {
+        let lower = extract.lowercased()
+
+        // Non-cultural content indicators — reject if the extract is about science/chemistry/biology/geography
+        let nonCulturalPatterns = [
+            "chemical compound", "organic compound", "molecular formula", "chemical formula",
+            "genus of", "species of", "family of", "order of", "phylum",
+            "reptile", "mammal", "insect", "amphibian", "invertebrate",
+            "protein", "enzyme", "molecule", "amino acid",
+            "municipality", "census-designated place", "unincorporated community",
+            "river in", "mountain in", "lake in",
+        ]
+
+        for pattern in nonCulturalPatterns {
+            if lower.contains(pattern) { return true }
+        }
+
+        return false
+    }
+
     /// Returns the full Wikipedia extract for an entity. Used when the user asks for comprehensive detail.
     /// Returns the cached extract if available, otherwise fetches fresh.
     static func fullExtract(for entityName: String) async -> String? {

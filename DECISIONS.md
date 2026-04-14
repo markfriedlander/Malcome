@@ -511,6 +511,30 @@ Citations should be deduplicated by source URL across the entire brief. Each uni
 Reason:
 [2] Bandcamp Daily and [4] Bandcamp Daily appearing in the same brief is confusing. A unified citation index makes the brief cleaner and the citation chips more useful.
 
+## Wikipedia domain validation
+
+Decision:
+Before accepting a Wikipedia result for an entity, check whether the extract contains domain-relevant content. If the entity is a music creator and the Wikipedia extract describes a chemical compound, reptile, or other non-cultural subject, reject the result and fall back to minimal entity context. This is a lightweight content sniff, not a full domain classifier.
+
+Reason:
+Xylitol (sugar alcohol) and Tortoise (reptile) are incorrect Wikipedia resolutions for music entities. The domain sniff catches obvious mismatches. MusicBrainz is the planned Phase 2 fix for comprehensive music entity resolution.
+
+## AFM-based Wikipedia phrase compression
+
+Decision:
+Replace the regex-based wikiContextPhrase heuristic with a small AFM call that compresses the Wikipedia first sentence into a clean 8-12 word identifying description suitable for use as an appositive. The regex approach truncates mid-proper-noun ("Sonic Youth" → "Son"). AFM understands sentence structure and proper nouns.
+
+Reason:
+String manipulation cannot reliably extract a natural-sounding descriptor from Wikipedia prose. One small AFM call per lead signal (~100 tokens) produces a clean appositive every time: "LA bassist and producer blending jazz, funk and hip-hop" instead of "American musician, singer, record producer, songwriter, and bassist from Los Angeles, California."
+
+## Template variation: 8+ variants per slot, no repetition within a brief
+
+Decision:
+Every template sentence in DraftComposer must have at least 8 variants. A used-phrase tracker prevents any variant from appearing twice in the same brief. The 16 template slots identified in the audit all require variation pools.
+
+Reason:
+"When sources that watch completely different parts of the scene agree independently, that kind of convergence is hard to fake" appeared 36 times in 50 synthetic scenarios. A user who reads Malcome twice in a week will notice and stop trusting the voice. 8+ variants per slot makes repetition within a week of daily use essentially impossible.
+
 ## Lead signal paragraph structure: five sentences, six journalism questions
 
 Decision:
