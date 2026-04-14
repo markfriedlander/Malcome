@@ -350,3 +350,16 @@ RETAG_OBSERVATIONS command re-runs the editorial content tagger on all stored ob
 Tab navigation with selection binding enables automatic navigation to Today after a Settings refresh.
 TESTING.md was created documenting the three-harness testing philosophy.
 Synthetic data initiative was added to NEXT.md as the next major planned work.
+
+## Phase 49
+
+The five-sentence lead paragraph structure was implemented, fixing the excerpt gap that left Sentence 2 as "Something is happening" for most entities.
+Root cause was that BriefComposer capped observations to 2 per signal, excluding editorial excerpts at position 3+. Cap increased to 4, and a last-resort excerpt fallback was added that takes the first substantial sentence from any editorial observation.
+Wikipedia disambiguation resolution was added — when a base title hits a disambiguation page, the resolver tries domain-specific qualifiers like (musician), (band), (artist).
+HTML entity decoding was added to cleanEvidence for common entities from RSS content.
+ExcerptDistiller batch size increased from 10 to 30 per refresh.
+Source city attribution was fixed to use observation location fields matched to source names, instead of unaligned arrays.
+The synthetic test harness was built with 50 scenarios covering signal count, strength, tier, domain mix, movement, watchlist state, source diversity, geography, excerpt quality, Wikipedia availability, and sentiment.
+Output includes wikipediaResolved and excerptSource diagnostic fields per scenario.
+Seattle source candidates were documented: KEXP, The Stranger, Hollow Earth Radio, each with upstream doctrine justification.
+SourcePipeline.swift refactor was flagged as a planned dedicated session.

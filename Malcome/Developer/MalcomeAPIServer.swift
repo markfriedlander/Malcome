@@ -544,6 +544,24 @@ class MalcomeAPIServer {
             SourcePipeline.devCadenceFloorSeconds = nil
             return (200, #"{"status":"ok","command":"SET_POLITENESS_MODE","mode":"production"}"#)
 
+        } else if trimmed == "RUN_SYNTHETIC_HARNESS" {
+            let report = await SyntheticHarness.run()
+            // Write full report to file
+            if let data = try? JSONEncoder().encode(report),
+               let json = String(data: data, encoding: .utf8) {
+                let outputPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                    .appendingPathComponent("synthetic_harness_output.json")
+                try? json.write(to: outputPath, atomically: true, encoding: .utf8)
+            }
+            // Return summary
+            let summaryLines = report.outputs.map { o in
+                "\(o.scenarioID) | \(o.title) | wiki:\(o.wikipediaResolved) | excerpt:\(o.excerptSource) | \(String(format: "%.1fs", o.generationSeconds))"
+            }.joined(separator: "\n")
+            let summary = """
+            {"status":"ok","command":"RUN_SYNTHETIC_HARNESS","total":\(report.totalScenarios),"completed":\(report.completedScenarios),"failed":\(report.failedScenarios),"summary":\(jsonEscape(summaryLines))}
+            """
+            return (200, summary)
+
         } else if trimmed == "RETAG_OBSERVATIONS" {
             guard let model = appModel else {
                 return (503, #"{"error":"AppViewModel unavailable"}"#)

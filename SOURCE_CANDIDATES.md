@@ -101,6 +101,11 @@ NY Art Beat
 Film Comment
 ARTnews
 
+Seattle:
+KEXP — community radio with deep scene embedding. Not a general music station — KEXP's programming reflects the taste of DJs who are genuinely part of the Seattle, Pacific Northwest, and global underground music communities. Their playlists surface artists before broader editorial consensus forms. Upstream, selective, and scene-embedded.
+The Stranger — Seattle's independent alternative newspaper. Covers music, art, and culture with a local-first perspective. Not a national publication reprinting wire stories — The Stranger's coverage reflects what is actually happening in Seattle's live scene. Strong doctrine fit for community and editorial lanes.
+Hollow Earth Radio — community radio station operating from Seattle's Central District. Hyperlocal, volunteer-run, deeply embedded in the city's DIY and experimental scenes. If something is happening on Hollow Earth before it shows up on KEXP, that is a meaningful progression signal.
+
 London:
 NTS
 Resident Advisor London

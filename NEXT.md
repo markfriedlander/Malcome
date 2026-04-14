@@ -45,7 +45,14 @@ Integration harness uses real entities with live Wikipedia API calls and real st
 Hybrid harness combines real entities and real Wikipedia with synthetic scenario metadata for end-to-end quality testing.
 Scenario dimensions cover signal count, strength, tier, domain mix, entity types, movement, watchlist state, source family diversity, geography, excerpt quality, Wikipedia availability, and sentiment.
 This enables deterministic testing without depending on live source content.
-16 Add calendar event integration via EventKit so Malcome can offer to add shows, openings, and releases to the user's calendar when an entity has date information. Native Apple framework, no dependencies. The architecture should surface date-bearing observations through the entity detail and chat layers.
+16 Seattle source expansion: KEXP, The Stranger, Hollow Earth Radio.
+All three are upstream community and scene infrastructure, not general coverage.
+Cross-city corroboration between Seattle and LA is a strong product differentiator.
+Flagged for discussion — do not add to active registry without review.
+17 SourcePipeline.swift refactor: all parsers into separate files conforming to a shared SourceParser protocol.
+SourcePipeline.swift becomes the orchestrator only.
+Dedicated session when nothing else is touching the parser layer. Paul may lead this.
+18 Add calendar event integration via EventKit so Malcome can offer to add shows, openings, and releases to the user's calendar when an entity has date information. Native Apple framework, no dependencies. The architecture should surface date-bearing observations through the entity detail and chat layers.
 
 ## Do not expand source count broadly yet.
 
