@@ -363,3 +363,19 @@ The synthetic test harness was built with 50 scenarios covering signal count, st
 Output includes wikipediaResolved and excerptSource diagnostic fields per scenario.
 Seattle source candidates were documented: KEXP, The Stranger, Hollow Earth Radio, each with upstream doctrine justification.
 SourcePipeline.swift refactor was flagged as a planned dedicated session.
+
+## Phase 50
+
+The DraftComposer voice was iteratively refined through 8 synthetic harness runs across 50 scenarios.
+Wikipedia domain validation was added to reject non-cultural Wikipedia results (Xylitol → sugar alcohol, Tortoise → reptile filtered).
+AFM-based Wikipedia phrase compression replaced the regex heuristic, producing clean 8-12 word appositives verified against the source text to prevent hallucination.
+Template variation pools were expanded to 8+ variants across 16 template slots with randomized selection and slot-index tracking to prevent within-brief repetition.
+Lead opener was varied across 8 phrases to eliminate the repeated "is the one right now" pattern.
+Historical tier signals now use placeholder-based templates so two historical signals in the same brief always get different paragraph structures.
+No-wiki entities use bare names with no generic filler — honest silence over "a music artist."
+Excerpt attribution was added: editorial content is framed as "According to [source]" rather than presented as Malcome's own observation.
+Same-family source language was added for when sources are in the same family, using honest framing instead of "independently."
+AFM excerpt compression handles long editorial excerpts by compressing via AFM into 1-2 clean sentences rather than truncating mid-sentence.
+Global double-period cleanup removes punctuation artifacts from excerpt and template concatenation.
+The NEW_BRIEF_CYCLE API command was made synchronous to ensure the brief is fresh when read.
+The same-family count bug in SignalEngine was identified: Bandcamp Daily and Bandcamp LA Discover are counted as separate families despite sharing the Bandcamp source family. Flagged for fix in SignalEngine.

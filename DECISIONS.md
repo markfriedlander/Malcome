@@ -511,6 +511,14 @@ Citations should be deduplicated by source URL across the entire brief. Each uni
 Reason:
 [2] Bandcamp Daily and [4] Bandcamp Daily appearing in the same brief is confusing. A unified citation index makes the brief cleaner and the citation chips more useful.
 
+## SignalEngine source family counting bug
+
+Decision:
+The SignalEngine's currentSourceFamilyCount must use source_family_id from the SourceRecord, not source_id. Currently Bandcamp Daily and Bandcamp LA Discover are counted as separate families (family count = 2) even though both have source_family_id = "bandcamp". The fix belongs in SignalEngine.compute() where source families are counted, not in the brief layer.
+
+Reason:
+The brief says "picked this up independently" based on currentSourceFamilyCount >= 2. When this count is wrong, Malcome misleads the user about the quality of the corroboration. Bandcamp-only coverage should be honestly framed as same-family support, not independent agreement.
+
 ## Wikipedia domain validation
 
 Decision:
