@@ -477,6 +477,14 @@ Radar is for users who want to go deeper. Signal and watchlist cards, one per en
 Settings contains source management with doctrine profiles collapsed behind disclosure chevrons and future domain preference toggles.
 Identity audit is a developer tool accessible only through the developer API or a hidden gesture, not in primary navigation.
 
+Parser architecture:
+
+SourcePipeline.swift is the pipeline orchestrator. Individual parsers live in separate files under Malcome/Services/Parsers/, each conforming to the SourceParsing protocol.
+Parser files: RSSFeedParser.swift, WordPressPostsParser.swift, BandcampTagParser.swift, DiceEventsParser.swift, VenueCalendarParser.swift, ResidentAdvisorParser.swift, GitHubTrendingParser.swift, GenericDiscussionParser.swift, StubParser.swift.
+SourceParserFactory maps ParserType to the appropriate parser implementation.
+SourcePipeline handles fetch, politeness, backoff, snapshot management, roundup expansion, and observation storage. It does not contain parser logic.
+HTMLSupport remains a shared utility for normalization, entity inference, alias handling, and text cleaning.
+
 Developer iteration infrastructure:
 
 MalcomeAPIServer is a local HTTP API on port 8766 adapted from Hal's LocalAPIServer.

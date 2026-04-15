@@ -15,9 +15,11 @@ enum MalcomeTokenEstimator {
     static func truncateAtSentenceBoundary(_ text: String, maxChars: Int) -> String {
         guard text.count > maxChars else { return text }
         let truncated = String(text.prefix(maxChars))
+        // Only truncate at a real sentence boundary — never mid-sentence
         if let lastPeriod = truncated.lastIndex(of: ".") {
             return String(truncated[...lastPeriod])
         }
-        return truncated
+        // No sentence boundary found — return the full text rather than breaking mid-sentence
+        return text
     }
 }

@@ -315,7 +315,7 @@ enum DraftComposer {
         }
 
         // Sentence 2 — What is specifically happening right now
-        let excerptContext = bestExcerptContext(from: packet.observations)
+        let excerptContext = await bestExcerptContext(from: packet.observations)
         if let context = excerptContext {
             sentences.append(context)
         } else {
@@ -457,7 +457,12 @@ enum DraftComposer {
         let wikiContext: String? = rawWikiContext.map { phrase in
             phrase.hasSuffix(".") ? phrase : phrase + "."
         }
-        let context = wikiContext ?? bestExcerptContext(from: packet.observations)
+        let context: String?
+        if let wiki = wikiContext {
+            context = wiki
+        } else {
+            context = await bestExcerptContext(from: packet.observations)
+        }
 
         let citedSources = sources.prefix(3).enumerated().map { index, sourceName -> String in
             let obs = index < packet.observations.count ? packet.observations[index] : packet.observations.first
@@ -692,7 +697,7 @@ enum DraftComposer {
 
     // MARK: - Excerpt Context
 
-    private static func bestExcerptContext(from observations: [ObservationRecord]) -> String? {
+    private static func bestExcerptContext(from observations: [ObservationRecord]) async -> String? {
         let entityName = observations.first?.authorOrArtist ?? observations.first?.normalizedEntityName ?? ""
 
         // Sort observations: editorial sources first, then discovery/platform
@@ -708,7 +713,7 @@ enum DraftComposer {
             if let distilled = obs.distilledExcerpt, !distilled.isEmpty {
                 let cleaned = cleanEvidence(distilled)
                 if cleaned.count >= 20, !isBandcampMetadata(cleaned) {
-                    return MalcomeTokenEstimator.truncateAtSentenceBoundary(cleaned, maxChars: 200)
+                    if let safe = await safeExcerpt(cleaned) { return safe }
                 }
             }
         }
@@ -723,35 +728,84 @@ enum DraftComposer {
             return (cleaned, mentionsEntity)
         }
 
-        // Prefer sentences that mention the entity name — those give specific context
+        // Prefer sentences that mention the entity name
         if let entitySpecific = candidates.first(where: { $0.1 }) {
-            return MalcomeTokenEstimator.truncateAtSentenceBoundary(entitySpecific.0, maxChars: 200)
+            if let safe = await safeExcerpt(entitySpecific.0) { return safe }
         }
 
         // Fall back to any non-generic excerpt
         if let fallback = candidates.first(where: { !isGenericEditorialObservation($0.0) }) {
-            return MalcomeTokenEstimator.truncateAtSentenceBoundary(fallback.0, maxChars: 200)
+            if let safe = await safeExcerpt(fallback.0) { return safe }
         }
 
-        // Last resort: take the first substantial sentence from any editorial excerpt,
-        // with minimal cleaning (just HTML entities and trim)
+        // Last resort: take editorial excerpt and compress if needed.
+        // Never truncate mid-sentence. Use AFM to compress long excerpts.
         for obs in sorted {
             guard let excerpt = obs.excerpt, !excerpt.isEmpty else { continue }
             if excerpt.hasPrefix("Surfacing on ") { continue }
             if isBandcampMetadata(excerpt) { continue }
             let cleaned = cleanEvidence(excerpt)
             if cleaned.count < 30 { continue }
-            // Find first proper sentence
-            if let dotSpace = cleaned.range(of: ". ") {
-                let firstSentence = String(cleaned[cleaned.startIndex...dotSpace.lowerBound]) + "."
-                if firstSentence.count >= 30 {
-                    return MalcomeTokenEstimator.truncateAtSentenceBoundary(firstSentence, maxChars: 200)
+
+            // If short enough, use as-is (must end with period)
+            if cleaned.count <= 200 && cleaned.hasSuffix(".") {
+                return cleaned
+            }
+
+            // Any excerpt over 60 chars — compress with AFM into 1-2 clean sentences
+            if cleaned.count > 60 {
+                if let compressed = await compressExcerpt(cleaned) {
+                    return compressed
                 }
             }
-            return MalcomeTokenEstimator.truncateAtSentenceBoundary(cleaned, maxChars: 200)
         }
 
         return nil
+    }
+
+    /// Returns a complete-sentence excerpt or nil. Never truncates mid-sentence.
+    /// Short complete excerpts pass through. Long excerpts get AFM compression.
+    private static func safeExcerpt(_ text: String) async -> String? {
+        // Short enough and ends with period — use as-is
+        if text.count <= 200 && text.hasSuffix(".") {
+            return text
+        }
+        // Has a complete sentence under 200 chars — use the first one
+        if let dotSpace = text.range(of: ". ") {
+            let first = String(text[text.startIndex...dotSpace.lowerBound]) + "."
+            if first.count >= 25 && first.count <= 200 {
+                return first
+            }
+        }
+        // Long text — compress with AFM
+        if text.count > 60 {
+            return await compressExcerpt(text)
+        }
+        return nil
+    }
+
+    /// Compress a long editorial excerpt into 1-2 clean sentences using AFM.
+    private static func compressExcerpt(_ excerpt: String) async -> String? {
+        guard SystemLanguageModel.default.isAvailable else { return nil }
+        let prompt = "Rewrite this into one or two complete sentences, maximum 40 words. Keep the key facts. No truncation. Input: \(String(excerpt.prefix(500))). Output:"
+        do {
+            let session = LanguageModelSession()
+            let response = try await session.respond(to: prompt)
+            var result = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            if result.count >= 20 && result.count <= 300 {
+                if !result.hasSuffix(".") { result += "." }
+                return result
+            }
+        } catch {}
+        return nil
+    }
+
+    private static func ensureEndsWithPeriod(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasSuffix(".") || trimmed.hasSuffix("!") || trimmed.hasSuffix("?") {
+            return trimmed
+        }
+        return trimmed + "."
     }
 
     private static func cleanExcerptForBrief(_ text: String, entityName: String) -> String {

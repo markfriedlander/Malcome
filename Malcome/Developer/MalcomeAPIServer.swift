@@ -623,8 +623,12 @@ class MalcomeAPIServer {
             guard let model = appModel else {
                 return (503, #"{"error":"AppViewModel unavailable"}"#)
             }
-            await MainActor.run {
-                Task { await model.forceRefresh() }
+            // Wait for refresh to complete before returning
+            await withCheckedContinuation { cont in
+                Task { @MainActor in
+                    await model.forceRefresh()
+                    cont.resume()
+                }
             }
             return (200, #"{"status":"ok","command":"NEW_BRIEF_CYCLE"}"#)
 
