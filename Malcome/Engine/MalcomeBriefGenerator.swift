@@ -142,21 +142,26 @@ struct DraftResult {
 
 enum DraftComposer {
 
-    /// Tracks used phrases within a single brief to prevent repetition.
-    private static var usedPhrases: Set<String> = []
+    /// Tracks used phrase indices within a single brief to prevent repetition.
+    /// Uses a hash of the variant array + index to track which template slot variants have been used.
+    private static var usedSlotIndices: Set<String> = []
 
     private static func pickPhrase(from variants: [String]) -> String {
-        let available = variants.filter { !usedPhrases.contains($0) }
-        if let pick = available.randomElement() {
-            usedPhrases.insert(pick)
-            return pick
+        // Create a slot key from the first variant (identifies the template slot)
+        let slotKey = String(variants.first?.prefix(30) ?? "")
+        let available = variants.enumerated().filter { index, _ in
+            !usedSlotIndices.contains("\(slotKey)::\(index)")
+        }
+        if let (index, phrase) = available.randomElement() {
+            usedSlotIndices.insert("\(slotKey)::\(index)")
+            return phrase
         }
         // All used — pick random from full set
         return variants.randomElement() ?? ""
     }
 
     static func compose(from input: BriefingInput, observationCount: Int = 0, nearMissCount: Int = 0) async -> DraftResult {
-        usedPhrases.removeAll()
+        usedSlotIndices.removeAll()
         var tracker = SourceTracker()
         let text: String
         if input.signals.isEmpty && input.watchlistCandidates.isEmpty {
@@ -215,11 +220,22 @@ enum DraftComposer {
             if !paragraphs.isEmpty {
                 paragraphs[paragraphs.count - 1] += " There is also something I have been sitting on."
             }
+            let historicalTemplates = [
+                "NAME has been building quietly in DOMAIN. I have been watching this for a while — SOURCES have both noticed independently, and the pattern has held. This is not new news, but it is durable, which is often more interesting.",
+                "NAME is not new to me. The DOMAIN sources have had this name in circulation for a while now. SOURCES have been consistent, and that kind of staying power is what I pay attention to.",
+                "I have been sitting on NAME for a few cycles. SOURCES keep returning to this name across DOMAIN, and the evidence has not thinned out. That tells me something.",
+                "The pattern around NAME is older than today's read. SOURCES have been tracking this independently in DOMAIN for long enough that I trust the signal even though it is not fresh news.",
+            ]
             for packet in historicalSignals {
                 let name = packet.signal.canonicalName
                 let domain = packet.signal.domain.label.lowercased()
                 let sources = packet.sourceNames.prefix(3).joined(separator: " and ")
-                paragraphs.append("\(name) has been building quietly in \(domain). I have been watching this for a while — \(sources) have both noticed independently, and the pattern has held. This is not new news, but it is durable, which is often more interesting.")
+                let template = pickPhrase(from: historicalTemplates)
+                let filled = template
+                    .replacingOccurrences(of: "NAME", with: name)
+                    .replacingOccurrences(of: "DOMAIN", with: domain)
+                    .replacingOccurrences(of: "SOURCES", with: sources)
+                paragraphs.append(filled)
             }
         }
 
@@ -294,12 +310,8 @@ enum DraftComposer {
         if let wiki = wikiContext {
             sentences.append("\(name) — \(wiki) — \(leadOpener).")
         } else {
-            let fallbackContext = minimalEntityContext(entityType: entityType, domain: domain)
-            if !fallbackContext.isEmpty {
-                sentences.append("\(name) — \(fallbackContext) — \(leadOpener).")
-            } else {
-                sentences.append("\(name) \(leadOpener).")
-            }
+            // No Wikipedia — use bare name. Honest silence is better than "a music artist."
+            sentences.append("\(name) \(leadOpener).")
         }
 
         // Sentence 2 — What is specifically happening right now
@@ -404,17 +416,7 @@ enum DraftComposer {
         return sentences.joined(separator: " ")
     }
 
-    /// Minimal entity context when Wikipedia returns nothing.
-    private static func minimalEntityContext(entityType: EntityType, domain: String) -> String {
-        switch entityType {
-        case .creator: return "a \(domain) artist"
-        case .collective: return "a \(domain) collective"
-        case .venue: return "a \(domain) venue"
-        case .event, .eventSeries: return "a \(domain) event"
-        case .scene: return "a \(domain) scene"
-        default: return ""
-        }
-    }
+    // Minimal fallback removed — honest silence (bare name) is better than "a music artist"
 
     // MARK: - Secondary Signals
 
@@ -618,13 +620,17 @@ enum DraftComposer {
 
         // Use AFM to compress into a clean appositive
         if SystemLanguageModel.default.isAvailable {
-            let prompt = "Compress this into an 8-12 word description. Do NOT include the person's name — just describe what they do. No full sentences. Example input: 'Thundercat is an American musician and bassist from Los Angeles.' Example output: 'LA bassist and producer blending jazz, funk and hip-hop'. Input: \(firstSentence). Output:"
+            let prompt = "Compress this into an 8-12 word description. Do NOT include the person's name. No full sentences. No trailing period. If a city is mentioned, integrate it as 'LA-based' or 'from Chicago', not as a standalone list item. Example input: 'Thundercat is an American musician and bassist from Los Angeles.' Example output: 'LA-based bassist and producer blending jazz, funk and hip-hop'. Input: \(firstSentence). Output:"
             do {
                 let session = LanguageModelSession()
                 let response = try await session.respond(to: prompt)
-                let phrase = response.content
+                var phrase = response.content
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .replacingOccurrences(of: "\"", with: "")
+                // Strip trailing punctuation — the appositive is wrapped in em-dashes, not a sentence
+                while phrase.hasSuffix(".") || phrase.hasSuffix(",") || phrase.hasSuffix(";") {
+                    phrase = String(phrase.dropLast()).trimmingCharacters(in: .whitespaces)
+                }
                 let wordCount = phrase.split(separator: " ").count
                 if wordCount >= 4 && wordCount <= 20 && !phrase.isEmpty {
                     return phrase
