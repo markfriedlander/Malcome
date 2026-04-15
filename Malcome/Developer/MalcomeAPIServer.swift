@@ -544,6 +544,34 @@ class MalcomeAPIServer {
             SourcePipeline.devCadenceFloorSeconds = nil
             return (200, #"{"status":"ok","command":"SET_POLITENESS_MODE","mode":"production"}"#)
 
+        } else if trimmed == "RUN_AB_TEST" {
+            guard let model = appModel else {
+                return (503, #"{"error":"AppViewModel unavailable"}"#)
+            }
+            let report = await ABTest.run(
+                repository: model.container.repository,
+                signalEngine: model.container.signalEngine,
+                briefComposer: model.container.briefComposer
+            )
+            // Write full report to file
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            if let data = try? encoder.encode(report),
+               let json = String(data: data, encoding: .utf8) {
+                let outputDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+                    .appendingPathComponent("ab_test_results.json")
+                try? json.write(to: outputDir, atomically: true, encoding: .utf8)
+            }
+            return (200, "{\"status\":\"ok\",\"command\":\"RUN_AB_TEST\",\"totalPairs\":\(report.totalPairs),\"completedPairs\":\(report.completedPairs)}")
+
+        } else if trimmed == "RUN_SIMPLE_EXPERIMENT" {
+            let result = await SimpleBriefExperiment.run()
+            let errorsJSON = result.fetchErrors.map { jsonEscape($0) }.joined(separator: ",")
+            let output = """
+            {"status":"ok","command":"RUN_SIMPLE_EXPERIMENT","itemCount":\(result.itemCount),"fetchErrors":[\(errorsJSON)],"inferenceSeconds":\(String(format:"%.1f",result.inferenceSeconds)),"response":\(jsonEscape(result.afmResponse)),"contextBlock":\(jsonEscape(String(result.contextBlock.prefix(500))))}
+            """
+            return (200, output)
+
         } else if trimmed == "RUN_SYNTHETIC_HARNESS" {
             let report = await SyntheticHarness.run()
             // Write full report to file
