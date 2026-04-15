@@ -22,7 +22,7 @@ enum BriefCaps {
 struct MalcomeBriefGenerator: BriefGenerating {
 
     private static let polishPrompt = """
-    Lightly edit the text below for natural flow. Change as little as possible. Keep the first-person voice, the short sentences, and the calm tone exactly as they are. Keep all citation markers like [1] and [2] exactly where they are. Do not add new words like "standout", "intriguing", "promising", "traction", "waves", "buzzing", "exciting", or "undeniable." Output the edited text only, nothing else.
+    Lightly edit the text below for natural flow. Change as little as possible. Keep the first-person voice, the short sentences, and the calm tone exactly as they are. Keep all citation markers like [1] and [2] exactly where they are. Keep all dash-bounded appositives (Name — description — verb) exactly as structured. Do not add new words like "standout", "intriguing", "promising", "traction", "waves", "buzzing", "exciting", or "undeniable." Output the edited text only, nothing else.
 
     TEXT:
     """
@@ -416,7 +416,34 @@ enum DraftComposer {
         return sentences.joined(separator: " ")
     }
 
-    // Minimal fallback removed — honest silence (bare name) is better than "a music artist"
+    /// Verify that an AFM-compressed phrase is grounded in the source and doesn't contain the entity name.
+    private static func phraseIsGrounded(_ phrase: String, in source: String, entityName: String) -> Bool {
+        let phraseLower = phrase.lowercased()
+        let sourceLower = source.lowercased()
+
+        // Reject if the entity name leaked into the phrase
+        if phraseLower.contains(entityName.lowercased()) { return false }
+
+        // Reject grammatically broken patterns
+        if phraseLower.contains("from la-based") || phraseLower.contains("la-based based") { return false }
+
+        // Extract significant words (3+ chars, capitalized) from the phrase
+        let phraseWords = phrase.split(separator: " ").map(String.init)
+        let significantWords = phraseWords.filter { word in
+            let clean = word.trimmingCharacters(in: .punctuationCharacters)
+            guard clean.count >= 3 else { return false }
+            // City names, proper nouns — anything that could be a hallucinated fact
+            return clean.first?.isUppercase == true || ["LA", "NYC", "UK", "DJ"].contains(clean)
+        }
+
+        if !significantWords.isEmpty {
+            let grounded = significantWords.filter { word in
+                sourceLower.contains(word.lowercased().trimmingCharacters(in: .punctuationCharacters))
+            }
+            return grounded.count >= max(1, (significantWords.count + 1) / 2)
+        }
+        return true
+    }
 
     // MARK: - Secondary Signals
 
@@ -425,7 +452,11 @@ enum DraftComposer {
         let sources = packet.sourceNames
         let domain = packet.signal.domain.label.lowercased()
         let movement = packet.signal.movement
-        let wikiContext = await wikiContextPhrase(for: name, domain: packet.signal.domain)
+        let rawWikiContext = await wikiContextPhrase(for: name, domain: packet.signal.domain)
+        // Ensure context phrases end with a period for proper sentence concatenation
+        let wikiContext: String? = rawWikiContext.map { phrase in
+            phrase.hasSuffix(".") ? phrase : phrase + "."
+        }
         let context = wikiContext ?? bestExcerptContext(from: packet.observations)
 
         let citedSources = sources.prefix(3).enumerated().map { index, sourceName -> String in
@@ -618,22 +649,23 @@ enum DraftComposer {
         let firstSentence = summary.firstSentence
         guard !firstSentence.isEmpty else { return nil }
 
-        // Use AFM to compress into a clean appositive
+        // Use AFM to compress into a clean appositive, then verify against source
         if SystemLanguageModel.default.isAvailable {
-            let prompt = "Compress this into an 8-12 word description. Do NOT include the person's name. No full sentences. No trailing period. If a city is mentioned, integrate it as 'LA-based' or 'from Chicago', not as a standalone list item. Example input: 'Thundercat is an American musician and bassist from Los Angeles.' Example output: 'LA-based bassist and producer blending jazz, funk and hip-hop'. Input: \(firstSentence). Output:"
+            let prompt = "Extract a short description from this text. 8-12 words. Do NOT include the subject's name. Do NOT add any facts not in the text. No full sentences. No trailing period. Input: \(firstSentence). Description:"
             do {
                 let session = LanguageModelSession()
                 let response = try await session.respond(to: prompt)
                 var phrase = response.content
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                     .replacingOccurrences(of: "\"", with: "")
-                // Strip trailing punctuation — the appositive is wrapped in em-dashes, not a sentence
                 while phrase.hasSuffix(".") || phrase.hasSuffix(",") || phrase.hasSuffix(";") {
                     phrase = String(phrase.dropLast()).trimmingCharacters(in: .whitespaces)
                 }
                 let wordCount = phrase.split(separator: " ").count
                 if wordCount >= 4 && wordCount <= 20 && !phrase.isEmpty {
-                    return phrase
+                    if phraseIsGrounded(phrase, in: firstSentence, entityName: entityName) {
+                        return phrase
+                    }
                 }
             } catch {}
         }
