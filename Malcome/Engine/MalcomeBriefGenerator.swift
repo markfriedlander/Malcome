@@ -35,9 +35,18 @@ struct MalcomeBriefGenerator: BriefGenerating {
         let nearMisses = input.watchlistCandidates.filter { $0.sourceFamilyCount == 1 && $0.observationCount >= 2 }.count
         let draftResult = await DraftComposer.compose(from: capped, observationCount: max(totalObs, 100), nearMissCount: nearMisses)
         // Skip AFM polish for empty/thin states — the draft is already the final text
-        let body = draftResult.sourceReferences.isEmpty
+        var body = draftResult.sourceReferences.isEmpty
             ? draftResult.text
             : await polishWithAFM(draftResult.text)
+        // Global cleanup: fix punctuation artifacts from excerpt/template concatenation
+        while body.contains("..") && !body.contains("...") {
+            body = body.replacingOccurrences(of: "..", with: ".")
+        }
+        // Fix quoted-text double punctuation: '.".' → '."' and '.". ' → '." '
+        body = body.replacingOccurrences(of: ".\".\"", with: ".\"")
+        body = body.replacingOccurrences(of: ".\".", with: ".\"")
+        body = body.replacingOccurrences(of: ".'.", with: ".'")
+        body = body.replacingOccurrences(of: ".\u{201D}.", with: ".\u{201D}")
         let title = briefTitle(from: capped, briefBody: body)
 
         let citations = draftResult.sourceReferences.enumerated().map { index, ref in
@@ -314,10 +323,18 @@ enum DraftComposer {
             sentences.append("\(name) \(leadOpener).")
         }
 
-        // Sentence 2 — What is specifically happening right now
+        // Sentence 2 — What is specifically happening right now (attributed to source)
         let excerptContext = await bestExcerptContext(from: packet.observations)
         if let context = excerptContext {
-            sentences.append(context)
+            // Find the editorial source for attribution
+            let editorialSource = packet.observations.first { obs in
+                obs.tags.contains("editorial") && obs.excerpt != nil && !obs.excerpt!.isEmpty
+            }
+            if let sourceName = editorialSource?.subtitle, !sourceName.isEmpty {
+                sentences.append("According to \(sourceName), \(context)")
+            } else {
+                sentences.append(context)
+            }
         } else {
             sentences.append(pickPhrase(from: [
                 "Something is happening — I do not have the full picture yet but the right sources are paying attention.",
@@ -359,16 +376,22 @@ enum DraftComposer {
         }
 
         let uniqueCities = Set(sourceCityMap.values)
-        if uniqueCities.count >= 2 && citedWithCity.count >= 2 {
+        let familyCount = packet.signal.currentSourceFamilyCount
+        let isTrulyIndependent = familyCount >= 2
+
+        if uniqueCities.count >= 2 && citedWithCity.count >= 2 && isTrulyIndependent {
             sentences.append("Both \(citedWithCity.prefix(2).joined(separator: " and ")) picked this up independently.")
-        } else if citedSources.count >= 2 {
+        } else if citedSources.count >= 2 && isTrulyIndependent {
             sentences.append("\(citedSources.joined(separator: " and ")) are both picking up on this independently in \(domain).")
+        } else if citedSources.count >= 2 {
+            // Same family — honest about it
+            sentences.append("\(citedSources.joined(separator: " and ")) are both covering this in \(domain).")
         } else if let source = citedSources.first {
             sentences.append("The signal is coming through \(source).")
         }
 
         // Sentence 4 — Why that agreement matters
-        if sources.count >= 2 {
+        if isTrulyIndependent && sources.count >= 2 {
             sentences.append(pickPhrase(from: [
                 "When sources that watch completely different parts of the \(domain) scene agree independently, that kind of convergence is hard to fake.",
                 "Independent agreement across different \(domain) lanes is the pattern I trust most. You cannot coordinate this by accident.",
@@ -378,6 +401,12 @@ enum DraftComposer {
                 "When genuinely independent parts of the \(domain) scene converge on a name without coordinating, I take it seriously.",
                 "The corroboration here is real — these are not the same editors reading the same press release.",
                 "Independent sources noticing the same thing is the pattern that separates signal from noise in \(domain).",
+            ]))
+        } else if sources.count >= 2 {
+            sentences.append(pickPhrase(from: [
+                "The coverage is real, though it is still within the same network. A second independent source family would make this stronger.",
+                "Multiple mentions from the same lane. Good attention, but I am waiting for a second independent family to confirm.",
+                "The repetition is noted but the agreement is within one source network. I want to see this from a genuinely different direction.",
             ]))
         }
 
@@ -801,11 +830,15 @@ enum DraftComposer {
     }
 
     private static func ensureEndsWithPeriod(_ text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasSuffix(".") || trimmed.hasSuffix("!") || trimmed.hasSuffix("?") {
-            return trimmed
+        var result = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Clean up any double periods
+        while result.contains("..") && !result.contains("...") {
+            result = result.replacingOccurrences(of: "..", with: ".")
         }
-        return trimmed + "."
+        if result.hasSuffix(".") || result.hasSuffix("!") || result.hasSuffix("?") || result.hasSuffix("\"") || result.hasSuffix("\u{201D}") {
+            return result
+        }
+        return result + "."
     }
 
     private static func cleanExcerptForBrief(_ text: String, entityName: String) -> String {
